@@ -372,7 +372,7 @@ def get_individual_hidden_states(model, batch_ids, layer=None, all_layers=True, 
         # first we need to get the first mask location for each example in the batch
         assert token_idx < 0, print("token_idx must be either 0 or negative, but got", token_idx)
         mask = batch_ids["decoder_attention_mask"] if (model_type == "encoder_decoder" and use_decoder) else batch_ids["attention_mask"]
-        first_mask_loc = get_first_mask_loc(mask).squeeze()
+        first_mask_loc = get_first_mask_loc(mask).squeeze().cpu()
         final_hs = hs[torch.arange(hs.size(0)), first_mask_loc+token_idx]  # (bs, dim, num_layers)
     
     return final_hs
@@ -480,26 +480,32 @@ class CCS(object):
         """
         Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
         """
-        informative_loss = (torch.min(p0, p1)**2).mean(0)
-        consistent_loss = ((p0 - (1-p1))**2).mean(0)
-        return informative_loss + consistent_loss
+        return self.get_consistent_loss(p0, p1) + self.get_informative_loss(p0, p1)
 
+    def get_consistent_loss(self, p0, p1):
+        return ((p0 - (1-p1))**2).mean(0)
+    
+    def get_informative_loss(self, p0, p1):
+        return (torch.min(p0, p1)**2).mean(0)
+    
 
     def get_acc(self, x0_test, x1_test, y_test):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
+        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test)
+    
+    def get_probe_acc(self, probe, x0_test, x1_test, y_test):
         x0 = torch.tensor(self.normalize(x0_test), dtype=torch.float, requires_grad=False, device=self.device)
         x1 = torch.tensor(self.normalize(x1_test), dtype=torch.float, requires_grad=False, device=self.device)
         with torch.no_grad():
-            p0, p1 = self.best_probe(x0), self.best_probe(x1)
+            p0, p1 = probe(x0), probe(x1)
         avg_confidence = 0.5*(p0 + (1-p1))
         predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
         acc = (predictions == y_test).mean()
         acc = max(acc, 1 - acc)
 
         return acc
-    
         
     def train(self):
         """
@@ -521,24 +527,25 @@ class CCS(object):
                 x0_batch = x0[j*batch_size:(j+1)*batch_size]
                 x1_batch = x1[j*batch_size:(j+1)*batch_size]
             
-            # probe
-            p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
+                # probe
+                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
 
-            # get the corresponding loss
-            loss = self.get_loss(p0, p1)
+                # get the corresponding loss
+                loss = self.get_loss(p0, p1)
 
-            # update the parameters
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                # update the parameters
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
         return loss.detach().cpu().item()
     
-    def repeated_train(self):
+    def repeated_train(self, x0_test, x1_test, y_test):
         best_loss = np.inf
         for train_num in range(self.ntries):
             self.initialize_probe()
             loss = self.train()
+            print(f"Train {train_num}: loss={loss:.5f} acc={self.get_probe_acc(self.probe, x0_test, x1_test, y_test):.5f}")
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
                 best_loss = loss

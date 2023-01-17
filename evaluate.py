@@ -31,7 +31,7 @@ def main(args, generation_args):
                     var_normalize=args.var_normalize)
     
     # train and evaluate CCS
-    ccs.repeated_train()
+    ccs.repeated_train(neg_hs_test, pos_hs_test, y_test)
     ccs_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
     print("CCS accuracy: {}".format(ccs_acc))
 
