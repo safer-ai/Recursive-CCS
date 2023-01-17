@@ -423,9 +423,34 @@ class MLPProbe(nn.Module):
         o = self.linear2(h)
         return torch.sigmoid(o)
 
+def project(x, constraints):
+    """Projects on the hyperplane defined by the constraints"""
+    inner_products = torch.einsum("...h,nh->...n", x, constraints)
+    return x - torch.einsum("...n,nh->...h", inner_products, constraints)
+
+def normalize(x):
+    return x / torch.norm(x, dim=-1, keepdim=True)
+
+def assert_orthonormal(x):
+    max_diff = torch.max(torch.abs(torch.einsum("nh,mh->nm", x, x) - torch.eye(x.size(0)).to(x.device)))
+    if max_diff > 1e-4:
+        print("Warning max_diff =", max_diff)
+    # assert torch.allclose(torch.einsum("nh,mh->nm", x, x), torch.eye(x.size(0)).to(x.device), atol=1e-4, rtol=1e-4)
+
+class LinearWithConstraints(nn.Module):
+    def __init__(self, d, constraints):
+        super().__init__()
+        self.linear = nn.Linear(d, 1)
+        self.constraints = constraints
+    def forward(self, x):
+        return F.linear(x, project(self.linear.weight, self.constraints), self.linear.bias)
+    def project(self):
+        with torch.no_grad():
+            self.linear.weight[:] = project(self.linear.weight, self.constraints)
+    
 class CCS(object):
     def __init__(self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-                 verbose=False, device="cuda", linear=True, weight_decay=0.01, var_normalize=False):
+                 verbose=False, device="cuda", linear=True, weight_decay=0.01, var_normalize=False, constraints=None):
         # data
         self.var_normalize = var_normalize
         self.x0 = self.normalize(x0)
@@ -443,16 +468,19 @@ class CCS(object):
         
         # probe
         self.linear = linear
+        self.constraints = constraints
         self.probe = self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
         
     def initialize_probe(self):
-        if self.linear:
+        if self.constraints is not None:
+            self.probe = LinearWithConstraints(self.d, self.constraints)
+        elif self.linear:
             self.probe = nn.Linear(self.d, 1)
         else:
             self.probe = MLPProbe(self.d)
-        self.probe.to(self.device)    
+        self.probe.to(self.device)
 
 
     def normalize(self, x):
@@ -510,19 +538,24 @@ class CCS(object):
     def train(self):
         """
         Does a single training run of nepochs epochs
+        
+        constraints is a tensor of shape (n, d) where n is the number of constraints
+        and constraints are <x, d_i> = 0 for each i
         """
         x0, x1 = self.get_tensor_data()
-        permutation = torch.randperm(len(x0))
-        x0, x1 = x0[permutation], x1[permutation]
         
         # set up optimizer
         optimizer = torch.optim.AdamW(self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        if isinstance(self.probe, LinearWithConstraints):
+            self.probe.project()
         
         batch_size = len(x0) if self.batch_size == -1 else self.batch_size
         nbatches = len(x0) // batch_size
 
         # Start training (full batch)
         for epoch in range(self.nepochs):
+            permutation = torch.randperm(len(x0))
+            x0, x1 = x0[permutation], x1[permutation]
             for j in range(nbatches):
                 x0_batch = x0[j*batch_size:(j+1)*batch_size]
                 x1_batch = x1[j*batch_size:(j+1)*batch_size]
@@ -537,6 +570,9 @@ class CCS(object):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
+                if isinstance(self.probe, LinearWithConstraints):
+                    self.probe.project()
 
         return loss.detach().cpu().item()
     
@@ -551,3 +587,24 @@ class CCS(object):
                 best_loss = loss
 
         return best_loss
+
+    def save(self, path):
+        torch.save(self.best_probe.state_dict(), path)
+    
+    def load(self, path):
+        self.best_probe.load_state_dict(torch.load(path))
+        self.best_probe.to(self.device)
+    
+    def get_direction(self):
+        """
+        Returns the direction of the probe
+        """
+        def get_dir():
+            if isinstance(self.best_probe, nn.Linear):
+                return self.best_probe.weight
+            elif isinstance(self.best_probe, LinearWithConstraints):
+                return self.best_probe.linear.weight
+            else:
+                raise NotImplementedError("Can't get direction for this probe")
+        
+        return normalize(get_dir().detach())
