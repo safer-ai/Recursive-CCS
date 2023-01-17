@@ -23,18 +23,35 @@ y_train, y_test = y[:len(y) // 2], y[len(y) // 2:]
 # %%
 device = "cuda"
 ccs_perfs = []
+ccs_consistency_loss = []
+ccs_informative_loss = []
+ccs_loss = []
 d = neg_hs.shape[1]
 constraints = torch.empty((0, d)).to(device)
+nb_dirs = 5
+use_train = True
 for i in range(10):
-    path = Path(f"css_dirs/rcss_20_dirs_{i}/ccs19.pt")
+    path = Path(f"css_dirs/rcss_20_dirs_long_{i}/ccs{nb_dirs-1}.pt")
     if path.exists():
         ccs_perfs.append([])
-        for j in range(20):
-            path = Path(f"css_dirs/rcss_20_dirs_{i}/ccs{j}.pt")
+        ccs_consistency_loss.append([])
+        ccs_informative_loss.append([])
+        ccs_loss.append([])
+        for j in range(nb_dirs):
+            path = Path(f"css_dirs/rcss_20_dirs_long_{i}/ccs{j}.pt")
             ccs = CCS(neg_hs_train, pos_hs, constraints=constraints, device=device)
             ccs.load(path)
-            perf = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
+            if use_train:
+                perf = ccs.get_acc(neg_hs_train, pos_hs_train, y_train)
+                c, I, l = ccs.eval(neg_hs_train, pos_hs_train)
+            else:
+                perf = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
+                c, I, l = ccs.eval(neg_hs_test, pos_hs_test)
+                
             ccs_perfs[-1].append(perf)
+            ccs_consistency_loss[-1].append(c)
+            ccs_informative_loss[-1].append(I)
+            ccs_loss[-1].append(l)
 # %%
 avg_perfs = np.mean(ccs_perfs, axis=0)
 for perfs in ccs_perfs:
@@ -42,5 +59,25 @@ for perfs in ccs_perfs:
 plt.plot(avg_perfs, color="blue", label="mean")
 plt.legend()
 plt.ylabel("Accuracy")
+plt.xlabel("Iteration")
+# %%
+avg_perfs = np.mean(ccs_loss, axis=0)
+for perfs in ccs_loss:
+    plt.plot(perfs, color="red", alpha=0.2)
+plt.plot(avg_perfs, color="red", label="mean")
+plt.legend()
+plt.ylabel("Loss")
+plt.xlabel("Iteration")
+# %%
+avg_perfs = np.mean(ccs_consistency_loss, axis=0)
+for perfs in ccs_consistency_loss:
+    plt.plot(perfs, color="orange", alpha=0.2)
+plt.plot(avg_perfs, color="orange", label="consistency loss")
+avg_perfs = np.mean(ccs_informative_loss, axis=0)
+for perfs in ccs_informative_loss:
+    plt.plot(perfs, color="darkviolet", alpha=0.2)
+plt.plot(avg_perfs, color="darkviolet", label="informative loss")
+plt.legend()
+plt.ylabel("Loss")
 plt.xlabel("Iteration")
 # %%

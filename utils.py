@@ -588,6 +588,34 @@ class CCS(object):
 
         return best_loss
 
+    def eval(self, x0_test, x1_test):
+        """
+        return consistent loss, informative loss, and loss on the test set
+        """
+        x0 = torch.tensor(x0_test, dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(x1_test, dtype=torch.float, requires_grad=False, device=self.device)
+        
+        batch_size = len(x0) if self.batch_size == -1 else self.batch_size
+        nbatches = len(x0) // batch_size
+        
+        consistent_loss = 0
+        informative_loss = 0
+
+        for j in range(nbatches):
+            x0_batch = x0[j*batch_size:(j+1)*batch_size]
+            x1_batch = x1[j*batch_size:(j+1)*batch_size]
+
+            with torch.no_grad():
+                # probe
+                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
+
+                # get the corresponding loss
+                consistent_loss += self.get_consistent_loss(p0, p1).item() * len(x0_batch)
+                informative_loss += self.get_informative_loss(p0, p1).item() * len(x0_batch)
+        consistent_loss /= len(x0)
+        informative_loss /= len(x0)
+        return consistent_loss, informative_loss, consistent_loss + informative_loss
+    
     def save(self, path):
         torch.save(self.best_probe.state_dict(), path)
     

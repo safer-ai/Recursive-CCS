@@ -37,7 +37,7 @@ def main(args, generation_args):
     for it in range(args.reciters):
         ccs = CCS(neg_hs_train, pos_hs_train, nepochs=args.nepochs, ntries=args.ntries, lr=args.lr, batch_size=args.ccs_batch_size, 
                     verbose=args.verbose, device=args.ccs_device, weight_decay=args.weight_decay, 
-                    var_normalize=args.var_normalize, constraints=constraints)
+                    var_normalize=args.var_normalize, lbfgs=args.lbfgs, constraints=constraints)
         ccs.repeated_train(neg_hs_test, pos_hs_test, y_test)
         ccs.save((path / f"ccs{it}.pt").open("wb"))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
@@ -68,6 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("--linear", action="store_true")
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--var_normalize", action="store_true")
+    parser.add_argument("--lbfgs", action="store_true")
     parser.add_argument("--run_name", type=str, default="")
     args = parser.parse_args(generation_argv + evaluation_argv)
     print(args)
