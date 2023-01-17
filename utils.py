@@ -469,7 +469,7 @@ class CCS(object):
         # probe
         self.linear = linear
         self.constraints = constraints
-        self.probe = self.initialize_probe()
+        self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
         

@@ -29,7 +29,7 @@ def main(args, generation_args):
     arg_dict = vars(args)
     exclude_keys = ["save_dir", "cache_dir", "device"]
     infos = "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys])
-    folder_name = str(hash(infos))[:20]
+    folder_name = args.run_name or str(hash(infos))[:20]
     path = Path("./css_dirs") / folder_name
     path.mkdir(parents=True, exist_ok=True)
     json.dump(arg_dict, (path / "args.json").open("w"))
@@ -68,6 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("--linear", action="store_true")
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--var_normalize", action="store_true")
-    args = parser.parse_args(evaluation_argv)
+    parser.add_argument("--run_name", type=str, default="")
+    args = parser.parse_args(generation_argv + evaluation_argv)
     print(args)
     main(args, generation_args)
