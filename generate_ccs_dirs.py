@@ -30,7 +30,7 @@ def main(args, generation_args):
     exclude_keys = ["save_dir", "cache_dir", "device"]
     infos = "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys])
     folder_name = args.run_name or str(hash(infos))[:20]
-    path = Path("./css_dirs") / folder_name
+    path = Path("./ccs_dirs") / folder_name
     path.mkdir(parents=True, exist_ok=True)
     json.dump(arg_dict, (path / "args.json").open("w"))
     
@@ -43,7 +43,7 @@ def main(args, generation_args):
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
         ccs_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
-        print("CCS accuracy: {}".format(ccs_acc))
+        print(f"CCS accuracy at it {it}: {ccs_acc}")
 
 if __name__ == "__main__":
     all_args = sys.argv[1:]

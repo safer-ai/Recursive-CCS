@@ -465,11 +465,11 @@ class CCS(object):
         self.device = device
         self.batch_size = batch_size
         self.weight_decay = weight_decay
+        self.lbfgs = lbfgs
         
         # probe
         self.linear = linear
         self.constraints = constraints
-        self.lbfgs = lbfgs # Not used yet
         self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
@@ -559,6 +559,10 @@ class CCS(object):
         batch_size = len(x0) if self.batch_size == -1 else self.batch_size
         nbatches = len(x0) // batch_size
 
+        if self.nepochs == 0:
+            # comptue loss on first batch
+            loss = self.get_loss(self.probe(x0[:batch_size]), self.probe(x1[:batch_size]))
+                
         # Start training (full batch)
         for epoch in range(self.nepochs):
             permutation = torch.randperm(len(x0))
@@ -583,11 +587,49 @@ class CCS(object):
 
         return loss.detach().cpu().item()
     
+    def train_with_lbfgs(self):
+        """
+        Does a single training run of nepochs epochs
+        
+        constraints is a tensor of shape (n, d) where n is the number of constraints
+        and constraints are <x, d_i> = 0 for each i
+        """
+        x0, x1 = self.get_tensor_data()
+        
+        # set up optimizer
+        optimizer = torch.optim.LBFGS(self.probe.parameters(), line_search_fn="strong_wolfe",
+                max_iter=self.nepochs,
+                tolerance_change=torch.finfo(x0.dtype).eps,)
+        if isinstance(self.probe, LinearWithConstraints):
+            self.probe.project()
+        
+        def closure():
+            if isinstance(self.probe, LinearWithConstraints):
+                self.probe.project()
+            optimizer.zero_grad()
+            p0, p1 = self.probe(x0), self.probe(x1)
+            loss = self.get_loss(p0, p1)
+            loss.backward()
+            # if isinstance(self.probe, LinearWithConstraints):
+            #     self.probe.project()
+            if not loss.isfinite():
+                print("Loss is not finite")
+                loss = torch.tensor(0.0, device=loss.device)
+                optimizer.zero_grad()
+            return loss
+
+        optimizer.step(closure)
+                
+        loss = closure()
+        if isinstance(self.probe, LinearWithConstraints):
+            self.probe.project()
+        return loss.detach().cpu().item()
+    
     def repeated_train(self, x0_test, x1_test, y_test):
         best_loss = np.inf
         for train_num in range(self.ntries):
             self.initialize_probe()
-            loss = self.train()
+            loss = self.train_with_lbfgs() if self.lbfgs else self.train()
             print(f"Train {train_num}: loss={loss:.5f} acc={self.get_probe_acc(self.probe, x0_test, x1_test, y_test):.5f}")
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
