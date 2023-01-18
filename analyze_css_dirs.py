@@ -28,17 +28,17 @@ ccs_informative_loss = []
 ccs_loss = []
 d = neg_hs.shape[1]
 constraints = torch.empty((0, d)).to(device)
-nb_dirs = 5
+nb_dirs = 20
 use_train = True
 for i in range(10):
-    path = Path(f"css_dirs/rcss_20_dirs_long_{i}/ccs{nb_dirs-1}.pt")
+    path = Path(f"ccs_dirs/rccs_20_dirs_long_{i}/ccs{nb_dirs-1}.pt")
     if path.exists():
         ccs_perfs.append([])
         ccs_consistency_loss.append([])
         ccs_informative_loss.append([])
         ccs_loss.append([])
         for j in range(nb_dirs):
-            path = Path(f"css_dirs/rcss_20_dirs_long_{i}/ccs{j}.pt")
+            path = Path(f"ccs_dirs/rccs_20_dirs_long_{i}/ccs{j}.pt")
             ccs = CCS(neg_hs_train, pos_hs, constraints=constraints, device=device)
             ccs.load(path)
             if use_train:
@@ -80,4 +80,20 @@ plt.plot(avg_perfs, color="darkviolet", label="informative loss")
 plt.legend()
 plt.ylabel("Loss")
 plt.xlabel("Iteration")
+# %%
+path = Path(f"ccs_dirs/rccs_20_dirs_long_0/ccs0.pt")
+ccs = CCS(neg_hs_train, pos_hs_train, constraints=constraints, device=device)
+ccs.load(path)
+# %%
+neg, pos = ccs.prepare(neg_hs_train, pos_hs_train)
+neg_activations = ccs.best_probe(neg)
+pos_activations = ccs.best_probe(pos)
+# %%
+m = torch.minimum(neg_activations, pos_activations)
+M = torch.maximum(neg_activations, pos_activations)
+plt.hist(m.data.cpu().numpy(), bins=100, range=(-1,2), alpha=0.5, label="min")
+plt.hist(M.data.cpu().numpy(), bins=100, range=(-1,2), alpha=0.5, label="max")
+plt.ylabel("Count")
+plt.xlabel("Activation")
+plt.legend()
 # %%

@@ -450,7 +450,7 @@ class LinearWithConstraints(nn.Module):
     
 class CCS(object):
     def __init__(self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-                 verbose=False, device="cuda", linear=True, weight_decay=0.01, var_normalize=False, constraints=None):
+                 verbose=False, device="cuda", linear=True, weight_decay=0.01, var_normalize=False, constraints=None, lbfgs=False):
         # data
         self.var_normalize = var_normalize
         self.x0 = self.normalize(x0)
@@ -469,6 +469,7 @@ class CCS(object):
         # probe
         self.linear = linear
         self.constraints = constraints
+        self.lbfgs = lbfgs # Not used yet
         self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
@@ -503,6 +504,13 @@ class CCS(object):
         x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
         return x0, x1
     
+    def prepare(self, x0, x1):
+        """
+        Returns x0, x1 as appropriate tensors (rather than np arrays)
+        """
+        x0 = torch.tensor(self.normalize(x0), dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(self.normalize(x1), dtype=torch.float, requires_grad=False, device=self.device)
+        return x0, x1
 
     def get_loss(self, p0, p1):
         """
@@ -524,8 +532,7 @@ class CCS(object):
         return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test)
     
     def get_probe_acc(self, probe, x0_test, x1_test, y_test):
-        x0 = torch.tensor(self.normalize(x0_test), dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.normalize(x1_test), dtype=torch.float, requires_grad=False, device=self.device)
+        x0, x1 = self.prepare(x0_test, x1_test)
         with torch.no_grad():
             p0, p1 = probe(x0), probe(x1)
         avg_confidence = 0.5*(p0 + (1-p1))
@@ -592,8 +599,7 @@ class CCS(object):
         """
         return consistent loss, informative loss, and loss on the test set
         """
-        x0 = torch.tensor(x0_test, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(x1_test, dtype=torch.float, requires_grad=False, device=self.device)
+        x0, x1 = self.prepare(x0_test, x1_test)
         
         batch_size = len(x0) if self.batch_size == -1 else self.batch_size
         nbatches = len(x0) // batch_size
@@ -607,8 +613,8 @@ class CCS(object):
 
             with torch.no_grad():
                 # probe
-                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
-
+                p0, p1 = self.best_probe(x0_batch), self.best_probe(x1_batch)
+    
                 # get the corresponding loss
                 consistent_loss += self.get_consistent_loss(p0, p1).item() * len(x0_batch)
                 informative_loss += self.get_informative_loss(p0, p1).item() * len(x0_batch)
