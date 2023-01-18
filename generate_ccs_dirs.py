@@ -38,12 +38,10 @@ def main(args, generation_args):
         ccs = CCS(neg_hs_train, pos_hs_train, nepochs=args.nepochs, ntries=args.ntries, lr=args.lr, batch_size=args.ccs_batch_size, 
                     verbose=args.verbose, device=args.ccs_device, weight_decay=args.weight_decay, 
                     var_normalize=args.var_normalize, lbfgs=args.lbfgs, constraints=constraints)
-        ccs.repeated_train(neg_hs_test, pos_hs_test, y_test)
+        ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
         ccs.save((path / f"ccs{it}.pt").open("wb"))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
-        ccs_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
-        print(f"CCS accuracy at it {it}: {ccs_acc}")
 
 if __name__ == "__main__":
     all_args = sys.argv[1:]

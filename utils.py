@@ -536,8 +536,11 @@ class CCS(object):
         with torch.no_grad():
             p0, p1 = probe(x0), probe(x1)
         avg_confidence = 0.5*(p0 + (1-p1))
+        # print("avg_confidence", avg_confidence[:10])
         predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
         acc = (predictions == y_test).mean()
+        # for i in [10,100,200, 500, 700, 800, 1000]:
+        #     print(f"acc@{i}", (predictions[:i] == y_test[:i]).mean())
         acc = max(acc, 1 - acc)
 
         return acc
@@ -587,7 +590,7 @@ class CCS(object):
 
         return loss.detach().cpu().item()
     
-    def train_with_lbfgs(self):
+    def train_with_lbfgs(self, debug=False):
         """
         Does a single training run of nepochs epochs
         
@@ -596,6 +599,13 @@ class CCS(object):
         """
         x0, x1 = self.get_tensor_data()
         
+        # l2 with SGD is equivalent to weight decay
+        # with l2, w = w - lr * (grad + l2 * w)
+        # with weight decay, w = w - w * weight_decay - lr * grad
+        # therefore weight_decay = l2 * lr
+        # but this doesn't work in practice so we just use weight decay
+        l2 = self.weight_decay
+        
         # set up optimizer
         optimizer = torch.optim.LBFGS(self.probe.parameters(), line_search_fn="strong_wolfe",
                 max_iter=self.nepochs,
@@ -603,12 +613,22 @@ class CCS(object):
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
         
-        def closure():
+        def closure(debug=False):
             if isinstance(self.probe, LinearWithConstraints):
                 self.probe.project()
             optimizer.zero_grad()
             p0, p1 = self.probe(x0), self.probe(x1)
             loss = self.get_loss(p0, p1)
+            
+            if debug:
+                print("loss", loss.item())
+            
+            if isinstance(self.probe, LinearWithConstraints):
+                loss += l2 * self.probe.linear.weight[0].norm()**2 / 2
+            
+            if debug:
+                print("loss", loss.item(), self.probe.linear.weight[0].shape)
+            
             loss.backward()
             # if isinstance(self.probe, LinearWithConstraints):
             #     self.probe.project()
@@ -618,29 +638,37 @@ class CCS(object):
                 optimizer.zero_grad()
             return loss
 
+        if debug:
+            closure(debug=True)
+            
         optimizer.step(closure)
                 
-        loss = closure()
+        loss = closure(debug=debug)
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
         return loss.detach().cpu().item()
     
-    def repeated_train(self, x0_test, x1_test, y_test):
+    def repeated_train(self, x0_test, x1_test, y_test, additional_info=""):
         best_loss = np.inf
         for train_num in range(self.ntries):
             self.initialize_probe()
             loss = self.train_with_lbfgs() if self.lbfgs else self.train()
-            print(f"Train {train_num}: loss={loss:.5f} acc={self.get_probe_acc(self.probe, x0_test, x1_test, y_test):.5f}")
+            print(f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={self.eval_probe(self.probe, x0_test, x1_test)[2]:.5f} test_acc={self.get_probe_acc(self.probe, x0_test, x1_test, y_test):.5f} ")
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
                 best_loss = loss
 
         return best_loss
+    
 
     def eval(self, x0_test, x1_test):
         """
         return consistent loss, informative loss, and loss on the test set
         """
+        return self.eval_probe(self.best_probe, x0_test, x1_test)
+    
+    
+    def eval_probe(self, probe, x0_test, x1_test):
         x0, x1 = self.prepare(x0_test, x1_test)
         
         batch_size = len(x0) if self.batch_size == -1 else self.batch_size
@@ -655,7 +683,7 @@ class CCS(object):
 
             with torch.no_grad():
                 # probe
-                p0, p1 = self.best_probe(x0_batch), self.best_probe(x1_batch)
+                p0, p1 = probe(x0_batch), probe(x1_batch)
     
                 # get the corresponding loss
                 consistent_loss += self.get_consistent_loss(p0, p1).item() * len(x0_batch)
