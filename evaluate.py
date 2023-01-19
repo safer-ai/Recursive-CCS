@@ -2,6 +2,7 @@ import sys
 from sklearn.linear_model import LogisticRegression
 from utils import get_parser, load_all_generations, CCS
 
+
 def main(args, generation_args):
     # load hidden states and labels
     neg_hs, pos_hs, y = load_all_generations(generation_args)
@@ -14,23 +15,33 @@ def main(args, generation_args):
         pos_hs = pos_hs.squeeze(1)
 
     # Very simple train/test split (using the fact that the data is already shuffled)
-    neg_hs_train, neg_hs_test = neg_hs[:len(neg_hs) // 2], neg_hs[len(neg_hs) // 2:]
-    pos_hs_train, pos_hs_test = pos_hs[:len(pos_hs) // 2], pos_hs[len(pos_hs) // 2:]
-    y_train, y_test = y[:len(y) // 2], y[len(y) // 2:]
+    neg_hs_train, neg_hs_test = neg_hs[: len(neg_hs) // 2], neg_hs[len(neg_hs) // 2 :]
+    pos_hs_train, pos_hs_test = pos_hs[: len(pos_hs) // 2], pos_hs[len(pos_hs) // 2 :]
+    y_train, y_test = y[: len(y) // 2], y[len(y) // 2 :]
 
     # Make sure logistic regression accuracy is reasonable; otherwise our method won't have much of a chance of working
     # you can also concatenate, but this works fine and is more comparable to CCS inputs
-    x_train = neg_hs_train - pos_hs_train  
+    x_train = neg_hs_train - pos_hs_train
     x_test = neg_hs_test - pos_hs_test
     lr = LogisticRegression(class_weight="balanced")
     lr.fit(x_train, y_train)
     print("Logistic regression accuracy: {}".format(lr.score(x_test, y_test)))
 
     # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
-    ccs = CCS(neg_hs_train, pos_hs_train, nepochs=args.nepochs, ntries=args.ntries, lr=args.lr, batch_size=args.ccs_batch_size, 
-                    verbose=args.verbose, device=args.ccs_device, linear=args.linear, weight_decay=args.weight_decay, 
-                    var_normalize=args.var_normalize)
-    
+    ccs = CCS(
+        neg_hs_train,
+        pos_hs_train,
+        nepochs=args.nepochs,
+        ntries=args.ntries,
+        lr=args.lr,
+        batch_size=args.ccs_batch_size,
+        verbose=args.verbose,
+        device=args.ccs_device,
+        linear=args.linear,
+        weight_decay=args.weight_decay,
+        var_normalize=args.var_normalize,
+    )
+
     # train and evaluate CCS
     ccs.repeated_train(neg_hs_test, pos_hs_test, y_test)
     ccs_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
@@ -42,11 +53,11 @@ if __name__ == "__main__":
     try:
         spliter = all_args.index("--")
         generation_argv = all_args[:spliter]
-        evaluation_argv = all_args[spliter + 1:]
+        evaluation_argv = all_args[spliter + 1 :]
     except:
         generation_argv = all_args
         evaluation_argv = []
-    
+
     parser = get_parser()
     generation_args = parser.parse_args(generation_argv)  # we'll use this to load the correct hidden states + labels
     # We'll also add some additional args for evaluation

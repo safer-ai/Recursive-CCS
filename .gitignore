@@ -2,3 +2,7 @@ __pycache__
 css_dirs
 ccs_dirs
 generated_hidden_states
+.mypy_cache
+models
+generation_results
+datasets

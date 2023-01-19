@@ -5,6 +5,7 @@ import torch
 from pathlib import Path
 import json
 
+
 def main(args, generation_args):
     # load hidden states and labels
     neg_hs, pos_hs, y = load_all_generations(generation_args)
@@ -17,42 +18,54 @@ def main(args, generation_args):
         pos_hs = pos_hs.squeeze(1)
 
     # Very simple train/test split (using the fact that the data is already shuffled)
-    neg_hs_train, neg_hs_test = neg_hs[:len(neg_hs) // 2], neg_hs[len(neg_hs) // 2:]
-    pos_hs_train, pos_hs_test = pos_hs[:len(pos_hs) // 2], pos_hs[len(pos_hs) // 2:]
-    y_train, y_test = y[:len(y) // 2], y[len(y) // 2:]
+    neg_hs_train, neg_hs_test = neg_hs[: len(neg_hs) // 2], neg_hs[len(neg_hs) // 2 :]
+    pos_hs_train, pos_hs_test = pos_hs[: len(pos_hs) // 2], pos_hs[len(pos_hs) // 2 :]
+    y_train, y_test = y[: len(y) // 2], y[len(y) // 2 :]
 
     # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
     print(neg_hs.shape)
     d = neg_hs.shape[1]
     constraints = torch.empty((0, d)).to(args.ccs_device)
-    
+
     arg_dict = vars(args)
     exclude_keys = ["save_dir", "cache_dir", "device"]
-    infos = "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys])
+    infos = "__".join(["{}_{}".format(k, v) for k, v in arg_dict.items() if k not in exclude_keys])
     folder_name = args.run_name or str(hash(infos))[:20]
     path = Path("./ccs_dirs") / folder_name
     path.mkdir(parents=True, exist_ok=True)
     json.dump(arg_dict, (path / "args.json").open("w"))
-    
+
     for it in range(args.reciters):
-        ccs = CCS(neg_hs_train, pos_hs_train, nepochs=args.nepochs, ntries=args.ntries, lr=args.lr, batch_size=args.ccs_batch_size, 
-                    verbose=args.verbose, device=args.ccs_device, weight_decay=args.weight_decay, 
-                    var_normalize=args.var_normalize, lbfgs=args.lbfgs, constraints=constraints)
+        ccs = CCS(
+            neg_hs_train,
+            pos_hs_train,
+            nepochs=args.nepochs,
+            ntries=args.ntries,
+            lr=args.lr,
+            batch_size=args.ccs_batch_size,
+            verbose=args.verbose,
+            device=args.ccs_device,
+            weight_decay=args.weight_decay,
+            var_normalize=args.var_normalize,
+            lbfgs=args.lbfgs,
+            constraints=constraints,
+        )
         ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
         ccs.save((path / f"ccs{it}.pt").open("wb"))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
+
 
 if __name__ == "__main__":
     all_args = sys.argv[1:]
     try:
         spliter = all_args.index("--")
         generation_argv = all_args[:spliter]
-        evaluation_argv = all_args[spliter + 1:]
+        evaluation_argv = all_args[spliter + 1 :]
     except:
         generation_argv = all_args
         evaluation_argv = []
-    
+
     parser = get_parser()
     generation_args = parser.parse_args(generation_argv)  # we'll use this to load the correct hidden states + labels
     # We'll also add some additional args for evaluation

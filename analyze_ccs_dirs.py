@@ -8,13 +8,22 @@ import json
 import torch
 from utils import get_parser, load_all_generations, CCS, assert_orthonormal, LinearWithConstraints
 from pathlib import Path
+
 #%%
 data_name = "__model_name_deberta__parallelize_False__dataset_name_imdb__split_test__prompt_idx_0__batch_size_40__num_examples_2000__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy"
 data_name2 = "__model_name_deberta__parallelize_False__dataset_name_imdb__split_train__prompt_idx_0__batch_size_40__num_examples_2000__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy"
 # data_name = "__model_name_deberta__parallelize_False__dataset_name_imdb__split_test__prompt_idx_0__batch_size_40__num_examples_400__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy"
 folder = "generated_hidden_states"
-neg_hs, pos_hs, y = np.load(f"./{folder}/negative_hidden_states{data_name}"), np.load(f"{folder}/positive_hidden_states{data_name}"), np.load(f"{folder}/labels{data_name}")
-neg_hs_test, pos_hs_test, y_test = np.load(f"./{folder}/negative_hidden_states{data_name2}"), np.load(f"{folder}/positive_hidden_states{data_name2}"), np.load(f"{folder}/labels{data_name2}")
+neg_hs, pos_hs, y = (
+    np.load(f"./{folder}/negative_hidden_states{data_name}"),
+    np.load(f"{folder}/positive_hidden_states{data_name}"),
+    np.load(f"{folder}/labels{data_name}"),
+)
+neg_hs_test, pos_hs_test, y_test = (
+    np.load(f"./{folder}/negative_hidden_states{data_name2}"),
+    np.load(f"{folder}/positive_hidden_states{data_name2}"),
+    np.load(f"{folder}/labels{data_name2}"),
+)
 # Make sure the shape is correct
 assert neg_hs.shape == pos_hs.shape
 neg_hs, pos_hs = neg_hs[..., -1], pos_hs[..., -1]  # take the last layer
@@ -30,9 +39,9 @@ if neg_hs_test.shape[1] == 1:
 # neg_hs_train, neg_hs_test = neg_hs[:len(neg_hs) // 2], neg_hs[len(neg_hs) // 2:]
 # pos_hs_train, pos_hs_test = pos_hs[:len(pos_hs) // 2], pos_hs[len(pos_hs) // 2:]
 # y_train, y_test = y[:len(y) // 2], y[len(y) // 2:]
-neg_hs_train = neg_hs[:len(neg_hs) // 2]
-pos_hs_train = pos_hs[:len(pos_hs) // 2]
-y_train = y[:len(y) // 2]
+neg_hs_train = neg_hs[: len(neg_hs) // 2]
+pos_hs_train = pos_hs[: len(pos_hs) // 2]
+y_train = y[: len(y) // 2]
 # %%
 device = "cuda"
 ccs_perfs = []
@@ -64,7 +73,7 @@ for i in range(10):
             else:
                 perf = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
                 c, I, l = ccs.eval(neg_hs_test, pos_hs_test)
-                
+
             ccs_perfs[-1].append(perf)
             ccs_consistency_loss[-1].append(c)
             ccs_informative_loss[-1].append(I)
@@ -118,8 +127,8 @@ for dir_nb in [0, nb_dirs - 1]:
     pos_activations = ccs.best_probe(pos)
     m = torch.minimum(neg_activations, pos_activations)
     M = torch.maximum(neg_activations, pos_activations)
-    plt.hist(m.data.cpu().numpy(), bins=100, range=(-1,2), alpha=0.5, label="min")
-    plt.hist(M.data.cpu().numpy(), bins=100, range=(-1,2), alpha=0.5, label="max")
+    plt.hist(m.data.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="min")
+    plt.hist(M.data.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="max")
     plt.ylabel("Count")
     plt.xlabel("Activation")
     s = "train" if use_train else "test"
