@@ -32,5 +32,7 @@
 # python generate.py --model_name unifiedqa --num_examples 4000 --batch_size 1 --dataset_name copa --split train;
 
 # python generation_main.py --model unifiedqa-t5-11b --swipe --print_more --cal_zeroshot 0 --datasets imdb amazon-polarity
-python generation_main.py --model gpt-j-6B --swipe --print_more --cal_zeroshot 0 --datasets imdb amazon-polarity --save_all_layers
-python generation_main.py --model unifiedqa-t5-11b --swipe --print_more --cal_zeroshot 0 --datasets copa ag-news dbpedia-14 rte boolq qnli piqa
+# python generation_main.py --model gpt-j-6B --swipe --print_more --cal_zeroshot 0 --datasets imdb amazon-polarity --save_all_layers
+# python generation_main.py --model unifiedqa-t5-11b --swipe --print_more --cal_zeroshot 0 --datasets copa ag-news dbpedia-14 rte boolq qnli piqa
+# python generation_main.py --model gpt-neo-125M --swipe --print_more --cal_zeroshot 0 --datasets imdb amazon-polarity --save_all_layers
+python generation_main.py --model gpt-neo-2.7B --swipe --print_more --cal_zeroshot 0 --datasets imdb amazon-polarity --save_all_layers

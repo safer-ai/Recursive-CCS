@@ -16,6 +16,8 @@
     "unifiedqa-t5-11b",
     "T0pp",
     "gpt-j-6B",
+    "gpt-neo-125M",
+    "gpt-neo-2.7B",
     "roberta-large-mnli",
     "deberta-v2-xxlarge-mnli"
   ],
@@ -37,6 +39,8 @@
     "unifiedqa-t5-11b": 25,
     "T0pp": 25,
     "gpt-j-6B": 29,
+    "gpt-neo-125M": 12,
+    "gpt-neo-2.7B": 32,
     "roberta-large-mnli": 25,
     "deberta-v2-xxlarge-mnli": 49
   },
@@ -45,6 +49,8 @@
     "T0pp": "T0",
     "deberta-v2-xxlarge-mnli": "DeBERTa",
     "gpt-j-6B": "GPT-J",
+    "gpt-neo-125M": "GPT-Neo-125M",
+    "gpt-neo-2.7B": "GPT-Neo-2.7B",
     "t5-11b": "T5",
     "roberta-large-mnli": "RoBERTa"
   }
