@@ -39,8 +39,8 @@
     "unifiedqa-t5-11b": 25,
     "T0pp": 25,
     "gpt-j-6B": 29,
-    "gpt-neo-125M": 12,
-    "gpt-neo-2.7B": 32,
+    "gpt-neo-125M": 13,
+    "gpt-neo-2.7B": 33,
     "roberta-large-mnli": 25,
     "deberta-v2-xxlarge-mnli": 49
   },

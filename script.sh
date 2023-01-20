@@ -1,5 +1,35 @@
 #!/bin/bash
 
+for i in {0..20}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b -- --ntries 1 --reciters 30 --nepochs 0 --run_name uqa_no_train_30_xl_$i;
+done
+
+for i in {0..4}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --run_name uqa_rccs_30_xl2_lbfgs_$i;
+done
+
+for i in {0..4}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay 0 --run_name uqa_rccs_30_xl_lbfgs_$i;
+done
+
+for i in {0..20}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa -- --ntries 1 --reciters 30 --nepochs 0 --run_name uqa_copa_no_train_30_xl_$i;
+done
+
+for i in {0..4}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --run_name uqa_copa_rccs_30_xl2_lbfgs_$i;
+done
+
+for i in {0..4}
+do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa  -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay 0 --run_name uqa_copa_rccs_30_xl_lbfgs_$i;
+done
+
 # for i in {0..20}
 # do
 #     python generate_ccs_dirs.py --model_name deberta  --num_examples 2000 --batch_size 40 -- --ntries 1 --reciters 30 --nepochs 0 --run_name no_train_30_xl_$i;
