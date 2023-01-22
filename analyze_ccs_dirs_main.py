@@ -11,12 +11,15 @@ from pathlib import Path
 from utils_generation.state_load_utils import getNegPosLabel
 
 #%%
+# model_name = "gpt-neo-2.7B"
 model_name = "unifiedqa-t5-11b"
-dataset_list = ["imdb"]
+dataset_list = ["copa"]
 num_examples = 1000
+layer = None # None for unifiedqa
 
-neg_hs_train, pos_hs_train, y_train = getNegPosLabel(model_name, dataset_list, split="train", data_num=num_examples)
-neg_hs_test, pos_hs_test, y_test = getNegPosLabel(model_name, dataset_list, split="test", data_num=num_examples)
+layer_ = layer if layer is not None else -1
+neg_hs_train, pos_hs_train, y_train = getNegPosLabel(model_name, dataset_list, split="train", data_num=num_examples, layer=layer_)
+neg_hs_test, pos_hs_test, y_test = getNegPosLabel(model_name, dataset_list, split="test", data_num=num_examples, layer=layer_)
 # %%
 device = "cuda"
 ccs_perfs = ([], [])
@@ -26,26 +29,45 @@ ccs_loss = ([], [])
 d = neg_hs_train.shape[1]
 constraints = torch.empty((0, d)).to(device)
 nb_dirs = 30
-use_train = False
 
-# css_path = "uqa_no_train_30_xl_"
-css_path = "uqa_rccs_30_xl_lbfgs_"
+css_path = "uqa_copa_orig_10000epochs"
 
-if dataset_list == ["imdb"]:
-    rand_min, rand_max = 0.5, 0.85
-if dataset_list == ["copa"]:
-    rand_min, rand_max = 0.5, 0.62
+css_no_train_path = None
+# css_no_train_path = "notrain_" + css_path
+
+layer_suffix = f"/layer{layer}" if layer is not None else ""
+
+if css_no_train_path is None:
+    if not css_path.startswith("uqa"):
+        raise ValueError()
+    if dataset_list == ["imdb"]:
+        rand_min, rand_max = 0.5, 0.85
+    elif dataset_list == ["copa"]:
+        rand_min, rand_max = 0.5, 0.62
+    else:
+        raise ValueError()
+else:
+    rdm_accs = []
+    for i in list(map(str,range(100))) + [""]:
+        for j in range(100):
+            path = Path(f"ccs_dirs/{css_no_train_path}{i}{layer_suffix}/ccs{j}.pt")
+            if path.exists():
+                ccs = CCS(neg_hs_train[0:1], pos_hs_train[0:1], constraints=constraints, device=device)
+                ccs.load(path)
+                acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
+                rdm_accs.append(acc)
+    rand_min, rand_max = np.quantile(rdm_accs, 0.05), np.quantile(rdm_accs, 0.95)
 
 for k,use_train in enumerate([False, True]):
-    for i in range(10):
-        path = Path(f"ccs_dirs/{css_path}{i}/ccs{nb_dirs-1}.pt")
+    for i in list(map(str,range(100))) + [""]:
+        path = Path(f"ccs_dirs/{css_path}{i}{layer_suffix}/ccs{nb_dirs-1}.pt")
         if path.exists():
             ccs_perfs[k].append([])
             ccs_consistency_loss[k].append([])
             ccs_informative_loss[k].append([])
             ccs_loss[k].append([])
             for j in range(nb_dirs):
-                path = Path(f"ccs_dirs/{css_path}{i}/ccs{j}.pt")
+                path = Path(f"ccs_dirs/{css_path}{i}{layer_suffix}/ccs{j}.pt")
                 ccs = CCS(neg_hs_train[0:1], pos_hs_train[0:1], constraints=constraints, device=device)
                 ccs.load(path)
                 if use_train:
@@ -70,7 +92,7 @@ for perfs in ccs_perfs[1]:
 avg_perfs = np.mean(ccs_perfs[1], axis=0)
 plt.plot(avg_perfs, color="blue", label="train mean", marker="o")
 
-plt.title(f"Accuracy on {model_name} - {dataset_list}")
+plt.title(f"Accuracy on {model_name}{layer_suffix} - {dataset_list}")
 plt.axhspan(rand_min, rand_max, label="chance", color="gray", alpha=0.2)
 plt.ylabel("Accuracy")
 plt.xlabel("Iteration")
@@ -113,14 +135,14 @@ plt.xlabel("Iteration")
 # %%
 use_train = True
 # subplots
-gaps = 4
+gaps = 2
 dir_nbs = np.linspace(0, nb_dirs - 1, gaps, dtype=int)
 fig, axs = plt.subplots(gaps, 2, figsize=(8, 6), sharex=True, sharey=True)
 fig.tight_layout()
 for i, use_train in enumerate([False, True]):
     for j, dir_nb in enumerate(dir_nbs):
         ax = axs[j,i]
-        path = Path(f"ccs_dirs/{css_path}0/ccs{dir_nb}.pt")
+        path = Path(f"ccs_dirs/{css_path}0{layer_suffix}/ccs{dir_nb}.pt")
         ccs = CCS(neg_hs_train, pos_hs_train, constraints=constraints, device=device)
         ccs.load(path)
         neg, pos = ccs.prepare(neg_hs_train, pos_hs_train) if use_train else ccs.prepare(neg_hs_test, pos_hs_test)
@@ -140,7 +162,33 @@ for i, use_train in enumerate([False, True]):
 for j, dir_nb in enumerate(dir_nbs):
     axs[j, 0].set_ylabel(f"dir {dir_nb}")
 
-plt.suptitle(f"Activation distribution on {model_name} - {dataset_list}")
+plt.suptitle(f"Activation distribution on {model_name}{layer_suffix} - {dataset_list}")
 plt.legend()
-plt.show()
 #%%
+# Single test
+path = Path(f"ccs_dirs/{css_path}{layer_suffix}/ccs0.pt")
+ccs = CCS(neg_hs_train, pos_hs_train, constraints=constraints, device=device)
+ccs.load(path)
+neg, pos = ccs.prepare(neg_hs_train, pos_hs_train)
+with torch.no_grad():
+    neg_activations = ccs.best_probe(neg)
+    pos_activations = ccs.best_probe(pos)
+    m = torch.minimum(neg_activations, pos_activations)
+    M = torch.maximum(neg_activations, pos_activations)
+plt.hist(m.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="min")
+plt.hist(M.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="max")
+plt.axvline(0, color="black", linestyle="dashed")
+plt.axvline(1, color="black", linestyle="dashed")
+plt.title(f"Activation distribution on {model_name} - {dataset_list}")
+plt.legend()
+# %%
+good_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 1]
+bad_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 0]
+plt.hist(good_activation.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="True")
+plt.hist(bad_activation.cpu().numpy(), bins=100, range=(-1, 2), alpha=0.5, label="False")
+plt.axvline(0, color="black", linestyle="dashed")
+plt.axvline(1, color="black", linestyle="dashed")
+plt.title(f"Activation distribution on {model_name} - {dataset_list}")
+plt.legend()
+
+# %%

@@ -4,14 +4,14 @@ from utils import get_parser, load_all_generations, CCS, assert_orthonormal
 import torch
 from pathlib import Path
 import json
-from utils_generation.state_load_utils import getNegPosLabel
+from utils_generation.state_load_utils import getNegPosLabel, models_layer_num
 
 
 def main(args, generation_args):
     # load hidden states and labels
-    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="train", data_num=generation_args.num_examples)
-    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="test", data_num=generation_args.num_examples)
-
+    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="train", data_num=generation_args.num_examples, layer=generation_args.layer)
+    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="test", data_num=generation_args.num_examples, layer=generation_args.layer)
+    
     # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
     print(neg_hs_train.shape)
     d = neg_hs_train.shape[1]
@@ -41,9 +41,10 @@ def main(args, generation_args):
             constraints=constraints,
         )
         ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
-        ccs.save((path / f"ccs{it}.pt").open("wb"))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
+        ccs.best_probe.constraints = torch.empty((0, d)).to(args.ccs_device) # empty the constraints before save
+        ccs.save((path / f"ccs{it}.pt").open("wb"))
 
 
 if __name__ == "__main__":
@@ -73,4 +74,5 @@ if __name__ == "__main__":
     parser.add_argument("--run_name", type=str, default="")
     args = parser.parse_args(generation_argv + evaluation_argv)
     print(args)
+    
     main(args, generation_args)
