@@ -512,12 +512,20 @@ class LinearWithConstraints(nn.Module):
         self.constraints = constraints
 
     def forward(self, x):
-        return F.linear(x, project(self.linear.weight, self.constraints), self.linear.bias)
+        w = project(self.linear.weight, self.constraints)
+        y = F.linear(x, w, self.linear.bias)
+        return torch.sigmoid(y)
 
     def project(self):
         with torch.no_grad():
             self.linear.weight[:] = project(self.linear.weight, self.constraints)
 
+class Linear(nn.Module):
+    def __init__(self, d) -> None:
+        super().__init__()
+        self.linear = nn.Linear(d, 1)
+    def forward(self, x):
+        return torch.sigmoid(self.linear(x))
 
 class CCS(object):
     def __init__(
@@ -562,7 +570,7 @@ class CCS(object):
         if self.constraints is not None:
             self.probe = LinearWithConstraints(self.d, self.constraints)
         elif self.linear:
-            self.probe = nn.Linear(self.d, 1)
+            self.probe = Linear(self.d)
         else:
             self.probe = MLPProbe(self.d)
         self.probe.to(self.device)
@@ -693,6 +701,7 @@ class CCS(object):
             line_search_fn="strong_wolfe",
             max_iter=self.nepochs,
             tolerance_change=torch.finfo(x0.dtype).eps,
+            tolerance_grad=torch.finfo(x0.dtype).eps,
         )
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
@@ -734,17 +743,23 @@ class CCS(object):
 
     def repeated_train(self, x0_test, x1_test, y_test, additional_info=""):
         best_loss = np.inf
+        best_test_loss = np.inf
+        best_test_acc = 0
         for train_num in range(self.ntries):
             self.initialize_probe()
             loss = self.train_with_lbfgs() if self.lbfgs else self.train()
+            test_loss = self.eval_probe(self.probe, x0_test, x1_test)[2]
+            test_acc = self.get_probe_acc(self.probe, x0_test, x1_test, y_test)
             print(
-                f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={self.eval_probe(self.probe, x0_test, x1_test)[2]:.5f} test_acc={self.get_probe_acc(self.probe, x0_test, x1_test, y_test):.5f} "
+                f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={test_loss:.5f} test_acc={test_acc:.5f} "
             )
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
                 best_loss = loss
+                best_test_loss = test_loss
+                best_test_acc = test_acc
 
-        return best_loss
+        return best_loss, best_test_loss, best_test_acc
 
     def eval(self, x0_test, x1_test):
         """

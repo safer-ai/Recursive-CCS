@@ -5,7 +5,8 @@ import torch
 from pathlib import Path
 import json
 from utils_generation.state_load_utils import getNegPosLabel, models_layer_num
-
+from time import time
+from datetime import datetime
 
 def main(args, generation_args):
     # load hidden states and labels
@@ -23,7 +24,9 @@ def main(args, generation_args):
     folder_name = args.run_name or str(hash(infos))[:20]
     path = Path("./ccs_dirs") / folder_name
     path.mkdir(parents=True, exist_ok=True)
-    json.dump(arg_dict, (path / "args.json").open("w"))
+    
+    st = time()
+    perfs = []
 
     for it in range(args.reciters):
         ccs = CCS(
@@ -40,11 +43,16 @@ def main(args, generation_args):
             lbfgs=args.lbfgs,
             constraints=constraints,
         )
-        ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
+        loss, test_loss, test_acc = ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
+        perfs.append((loss, test_loss, test_acc))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
         ccs.best_probe.constraints = torch.empty((0, d)).to(args.ccs_device) # empty the constraints before save
         ccs.save((path / f"ccs{it}.pt").open("wb"))
+    
+    runtime = time() - st
+    
+    json.dump({"args": arg_dict, "runtime": runtime, "timestamp": datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), "loss_testloss_testacc": perfs}, (path / "args.json").open("w"))
 
 
 if __name__ == "__main__":

@@ -15,8 +15,10 @@ from matplotlib import rcParams
 rcParams['figure.figsize'] = 10, 8
 
 #%%
+# model_name = "gpt-neo-2.7B"
 model_name = "gpt-neo-2.7B"
-css_path = "neo27_imdb_w01_30_"
+# model_name = "gpt-j-6B"
+css_path = "neo27_imdb_30_"
 dataset_list = ["imdb"]
 num_examples = 1000
 nb_dirs = 30
@@ -131,7 +133,6 @@ for j, dir in enumerate(dirs_displayed):
 plt.title(f"Loss on {model_name} - {dataset_list}")
 plt.ylabel("Loss")
 plt.xlabel("Layer")
-plt.yscale("log")
 plt.xticks(layers, layers)
 plt.legend()
 # %%
