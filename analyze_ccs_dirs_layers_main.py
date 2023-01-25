@@ -16,16 +16,17 @@ rcParams['figure.figsize'] = 10, 8
 
 #%%
 # model_name = "gpt-neo-2.7B"
-model_name = "gpt-neo-2.7B"
-# model_name = "gpt-j-6B"
-css_path = "neo27_imdb_30_"
+# model_name = "gpt-neo-2.7B"
+model_name = "gpt-j-6B"
+css_path = "gptj_imdb_orig_30_"
 dataset_list = ["imdb"]
 num_examples = 1000
 nb_dirs = 30
 dirs_displayed = [0, 1, 2, 10, 20, 29]
 layers = [l for l in range(1,100) if Path(f"ccs_dirs/{css_path}0/layer{l}/ccs0.pt").exists()]
-# css_no_train_path = "notrain_" + css_path
-css_no_train_path = "notrain_" + css_path.replace("_w01", "")
+css_no_train_path = "notrain_" + css_path
+for p in ["orig_", "w01_", "w03_" "w1_", "w001_", "w003_", "w0001_"]:
+    css_no_train_path = css_no_train_path.replace(p, "")
 #%%
 datasets = {}
 for layer in layers:

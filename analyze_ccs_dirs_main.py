@@ -13,16 +13,19 @@ from utils_generation.state_load_utils import getNegPosLabel
 #%%
 # model_name = "gpt-neo-2.7B"
 model_name = "unifiedqa-t5-11b"
-dataset_list = ["imdb"]
+dataset_list = ["imdb","amazon-polarity","copa","ag-news","dbpedia-14","rte","boolq","qnli","piqa"]
 num_examples = 1000
 layer = None # None for unifiedqa
 
-css_path = "uqa_imdb_30_w0001_"
+css_path = "uqa_all_30_w0_"
 
 css_no_train_path = "notrain_" + css_path
-for p in ["orig_", "w01_", "w03_" "w1_", "w001_", "w003_", "w0001_"]:
+for p in ["orig_", "w01_", "w03_" "w1_", "w001_", "w003_", "w0001_", "w0_"]:
     css_no_train_path = css_no_train_path.replace(p, "")
 layer_suffix = f"/layer{layer}" if layer is not None else ""
+
+assert Path(f"ccs_dirs/{css_path}0{layer_suffix}/ccs0.pt").exists()
+assert Path(f"ccs_dirs/{css_no_train_path}0{layer_suffix}/ccs0.pt").exists()
 
 layer_ = layer if layer is not None else -1
 neg_hs_train, pos_hs_train, y_train = getNegPosLabel(model_name, dataset_list, split="train", data_num=num_examples, layer=layer_)
@@ -83,7 +86,7 @@ for perfs in ccs_perfs[1]:
 avg_perfs = np.mean(ccs_perfs[1], axis=0)
 plt.plot(avg_perfs, color="blue", label="train mean", marker="o")
 
-plt.title(f"Accuracy on {model_name}{layer_suffix} - {dataset_list}")
+plt.title(f"Accuracy on {css_path[:-1]}")
 plt.axhspan(rand_min, rand_max, label="chance +/- 2std", color="gray", alpha=0.2)
 plt.ylabel("Accuracy")
 plt.xlabel("Iteration")
@@ -99,7 +102,8 @@ for perfs in ccs_loss[1]:
 avg_perfs = np.mean(ccs_loss[1], axis=0)
 plt.plot(avg_perfs, color="blue", label="train mean", marker="o")
 plt.legend()
-plt.ylabel("Loss")
+plt.ylabel(f"Loss")
+plt.title(f"Loss on {css_path[:-1]}")
 plt.xlabel("Iteration")
 # %%
 avg_perfs = np.mean(ccs_consistency_loss[0], axis=0)
@@ -121,7 +125,8 @@ for perfs in ccs_informative_loss[1]:
 plt.plot(avg_perfs, color="blue", label="informative loss train", marker="o")
 
 plt.legend()
-plt.ylabel("Loss")
+plt.ylabel(f"Loss")
+plt.title(f"Loss on {css_path[:-1]}")
 plt.xlabel("Iteration")
 # %%
 use_train = True
@@ -150,7 +155,7 @@ for i, use_train in enumerate([False, True]):
 for j, dir_nb in enumerate(dir_nbs):
     axs[j, 0].set_ylabel(f"dir {dir_nb}")
 
-plt.suptitle(f"Activation distribution on {model_name}{layer_suffix} - {dataset_list}")
+plt.suptitle(f"Activation distribution on {css_path[:-1]}")
 plt.legend()
 #%%
 # Single test
@@ -165,7 +170,7 @@ good_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 1
 bad_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 0]
 plt.hist(good_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="True")
 plt.hist(bad_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="False")
-plt.title(f"Activation distribution on {model_name} - {dataset_list}")
+plt.title(f"Activation distribution on {css_path[:-1]}")
 plt.legend()
 
 # %%

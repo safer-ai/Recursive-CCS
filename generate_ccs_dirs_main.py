@@ -10,8 +10,8 @@ from datetime import datetime
 
 def main(args, generation_args):
     # load hidden states and labels
-    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="train", data_num=generation_args.num_examples, layer=generation_args.layer)
-    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(generation_args.model_name, [generation_args.dataset_name], split="test", data_num=generation_args.num_examples, layer=generation_args.layer)
+    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(generation_args.model_name, generation_args.dataset_name, split="train", data_num=generation_args.num_examples, layer=generation_args.layer)
+    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(generation_args.model_name, generation_args.dataset_name, split="test", data_num=generation_args.num_examples, layer=generation_args.layer)
     
     # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
     print(neg_hs_train.shape)

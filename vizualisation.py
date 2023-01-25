@@ -4,12 +4,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 # %%
 x0_means = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-x1_means = torch.tensor([[-1.0, 0.0], [-0.0, -1.0]])
+x1_means = torch.tensor([[-1.0, 0.0], [-1.0, -1.0]])
 means_nb = x0_means.shape[0]
 assert means_nb == x1_means.shape[0]
 # add random points around those means
-n = 1
-std = 0.5
+n = 10
+std = 0.1
 D = 2
 bias = 0
 x0 = (torch.randn(n, means_nb, D) * std + x0_means).reshape(-1, D)

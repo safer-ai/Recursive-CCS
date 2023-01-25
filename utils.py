@@ -45,7 +45,7 @@ def get_parser():
     parser.add_argument("--parallelize", action="store_true", help="Whether to parallelize the model")
     parser.add_argument("--device", type=str, default="cuda", help="Device to use for the model")
     # setting up data
-    parser.add_argument("--dataset_name", type=str, default="imdb", help="Name of the dataset to use")
+    parser.add_argument("--dataset_name", nargs="+", default=["imdb"], help="Name of the datasets to use")
     parser.add_argument("--split", type=str, default="test", help="Which split of the dataset to use")
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
@@ -520,6 +520,19 @@ class LinearWithConstraints(nn.Module):
         with torch.no_grad():
             self.linear.weight[:] = project(self.linear.weight, self.constraints)
 
+class LinearAlong(nn.Module):
+    def __init__(self, along):
+        super().__init__()
+        n, d = along.shape
+        self.coeffs = nn.Linear(n, 1)
+        self.coeffs.weight.data = torch.ones_like(self.coeffs.weight.data) / n
+        self.along = along
+    
+    def forward(self, x):
+        w = torch.einsum("nd,nh->hd", self.along, self.coeffs.weight)
+        y = F.linear(x, w, self.coeffs.bias)
+        return torch.sigmoid(y)
+            
 class Linear(nn.Module):
     def __init__(self, d) -> None:
         super().__init__()
@@ -542,6 +555,7 @@ class CCS(object):
         weight_decay=0.01,
         var_normalize=False,
         constraints=None,
+        along=None,
         lbfgs=False,
     ):
         # data
@@ -562,13 +576,17 @@ class CCS(object):
 
         # probe
         self.linear = linear
+        assert not (constraints is not None and along is not None)
         self.constraints = constraints
+        self.along = along
         self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
     def initialize_probe(self):
         if self.constraints is not None:
             self.probe = LinearWithConstraints(self.d, self.constraints)
+        elif self.along is not None:
+            self.probe = LinearAlong(self.along)
         elif self.linear:
             self.probe = Linear(self.d)
         else:
@@ -614,13 +632,13 @@ class CCS(object):
     def get_informative_loss(self, p0, p1):
         return (torch.min(p0, p1) ** 2).mean(0)
 
-    def get_acc(self, x0_test, x1_test, y_test):
+    def get_acc(self, x0_test, x1_test, y_test, raw=False):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
-        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test)
+        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test,raw=raw)
 
-    def get_probe_acc(self, probe, x0_test, x1_test, y_test):
+    def get_probe_acc(self, probe, x0_test, x1_test, y_test, raw=False):
         x0, x1 = self.prepare(x0_test, x1_test)
         with torch.no_grad():
             p0, p1 = probe(x0), probe(x1)
@@ -630,7 +648,8 @@ class CCS(object):
         acc = (predictions == y_test).mean()
         # for i in [10,100,200, 500, 700, 800, 1000]:
         #     print(f"acc@{i}", (predictions[:i] == y_test[:i]).mean())
-        acc = max(acc, 1 - acc)
+        if not raw:
+            acc = max(acc, 1 - acc)
 
         return acc
 
@@ -741,7 +760,7 @@ class CCS(object):
             self.probe.project()
         return loss.detach().cpu().item()
 
-    def repeated_train(self, x0_test, x1_test, y_test, additional_info=""):
+    def repeated_train(self, x0_test, x1_test, y_test, additional_info="", verbose=True):
         best_loss = np.inf
         best_test_loss = np.inf
         best_test_acc = 0
@@ -750,9 +769,10 @@ class CCS(object):
             loss = self.train_with_lbfgs() if self.lbfgs else self.train()
             test_loss = self.eval_probe(self.probe, x0_test, x1_test)[2]
             test_acc = self.get_probe_acc(self.probe, x0_test, x1_test, y_test)
-            print(
-                f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={test_loss:.5f} test_acc={test_acc:.5f} "
-            )
+            if verbose:
+                print(
+                    f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={test_loss:.5f} test_acc={test_acc:.5f} "
+                )
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
                 best_loss = loss

@@ -1,13 +1,25 @@
 #!/bin/bash
 
-list=(0.1 0.03 0.01 0.003 0.001)
+for i in {0..3}; do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 0 --run_name notrain_uqa_all_30_$i;
+done
+
+list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
 for w in "${list[@]}"; do
     for i in {0..3}; do
         echo $w ${w#*.}
-        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_copa_30_w${w#*.}_$i;
-        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_imdb_30_w${w#*.}_$i;
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_all_30_w${w#*.}_$i;
     done
 done
+
+# list=(0.1 0.03 0.01 0.003 0.001)
+# for w in "${list[@]}"; do
+#     for i in {0..3}; do
+#         echo $w ${w#*.}
+#         python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_copa_30_w${w#*.}_$i;
+#         python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_imdb_30_w${w#*.}_$i;
+#     done
+# done
 
 # for i in {0..2}; do
 # python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name copa -- --ntries 10 --reciters 30 --run_name uqa_copa_orig_1000_$i
