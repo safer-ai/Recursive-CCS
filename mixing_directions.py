@@ -17,6 +17,7 @@ num_examples = 1000
 layer = None # None for unifiedqa
 
 css_path = "uqa_copa_30_w01_"
+# css_path = "uqa_all_30_w01_"
     
 layer_suffix = f"/layer{layer}" if layer is not None else ""
 
@@ -40,8 +41,8 @@ def get_dir(ccs_path):
 dirs = [get_dir(f"ccs_dirs/{css_path}0{layer_suffix}/ccs{i}.pt") for i in range(nb_dirs)]
 
 ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0], device=device, lbfgs=True, ntries=1, weight_decay=0)
-loss, test_loss, test_acc = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
-print(f"Loss: {loss: 4f}, Test loss: {test_loss:.4f}, Test acc: {test_acc:.4f}")
+min_loss, test_loss, test_acc = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+print(f"Loss: {min_loss: 4f}, Test loss: {test_loss:.4f}, Test acc: {test_acc:.4f}")
 # %%
 
 ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[10], device=device, lbfgs=True, ntries=1, weight_decay=0)
@@ -51,20 +52,99 @@ print(f"Loss: {loss: 4f}, Test loss: {test_loss:.4f}, Test acc: {test_acc:.4f}")
 ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0] + dirs[10], device=device, lbfgs=True, ntries=1, weight_decay=0)
 loss, test_loss, test_acc = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
 print(f"Loss: {loss: 4f}, Test loss: {test_loss:.4f}, Test acc: {test_acc:.4f}")
+#%%
+# Mixing random pairs of directions
+import matplotlib as mpl
+
+its = 30
+intervals = 11
+max_loss = 0.2 + (0.2 - min_loss)
+cmap = plt.cm.get_cmap('bwr')
+np.random.seed(1)
+all_losses = []
+for _ in trange(its):
+    dir_idxs = np.random.choice(nb_dirs, 2, replace=False)
+    dir1, dir2 = [dirs[i] for i in dir_idxs]
+    losses = np.zeros(intervals)
+    alphas = np.linspace(0, 1, intervals)
+    for i,alpha in enumerate(alphas):
+        dir_mix = (1 - alpha) * dir1 + alpha * dir2
+        loss, _, _ = CCS(neg_hs_train, pos_hs_train, along=dir_mix, device=device, lbfgs=True, ntries=1, weight_decay=0).repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+        losses[i] = loss
+    if losses[0] == losses[-1]:
+        continue
+    if losses[0] > losses[-1]:
+        losses = losses[::-1]
+    all_losses.append(losses)
+#%%
+for losses in all_losses:
+    # normalize
+    # norm_losses = (losses - losses[0]) / (losses[-1] - losses[0])
+    
+    # col = cmap(np.interp(np.max(losses), [min_loss, max_loss], [0, 1]))
+    col = "red"
+    plt.plot(alphas, losses, color=col, alpha=0.3)
+# plt.axhline(0, color="black", linestyle="--")
+# plt.axhline(1, color="black", linestyle="--")
+# cbar = plt.colorbar(mpl.cm.ScalarMappable(cmap=cmap), label="max loss", ticks=list(np.linspace(0, 1, 7)))
+# cbar.ax.set_yticklabels([f"{i:.2f}" for i in np.linspace(min_loss, max_loss, 7)])
+plt.title(f"Losses when you mix random rccs directions")
+plt.xlabel("alpha")
+plt.ylabel("loss")
+#%%
+# Mixing random pairs of directions
+# import matplotlib as mpl
+
+# its = 30
+# intervals = 11
+# max_loss = 0.2 + (0.2 - min_loss)
+# cmap = plt.cm.get_cmap('bwr')
+# np.random.seed(1)
+# for _ in trange(its):
+#     rdm_dirs = torch.randn(2, 1, d)
+#     for i, d in enumerate(rdm_dirs):
+#         _, _, test_acc = CCS(neg_hs_train, pos_hs_train, along=d, device=device, lbfgs=True, ntries=1, weight_decay=0).repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+#         if test_acc < 0.5:
+#             rdm_dirs[i] = -d
+#     dir1, dir2 = rdm_dirs
+    
+#     losses = np.zeros(intervals)
+#     alphas = np.linspace(0, 1, intervals)
+#     for i,alpha in enumerate(alphas):
+#         dir_mix = (1 - alpha) * dir1 + alpha * dir2
+#         loss, _, _ = CCS(neg_hs_train, pos_hs_train, along=dir_mix, device=device, lbfgs=True, ntries=1, weight_decay=0).repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+#         losses[i] = loss
+#     if losses[0] == losses[-1]:
+#         continue
+#     if losses[0] > losses[-1]:
+#         losses = losses[::-1]
+#     # normalize
+#     # norm_losses = (losses - losses[0]) / (losses[-1] - losses[0])
+    
+#     # col = cmap(np.interp(np.max(losses), [min_loss, max_loss], [0, 1]))
+#     col = "red"
+#     plt.plot(alphas, losses, color=col, alpha=1)
+# # plt.axhline(0, color="black", linestyle="--")
+# # plt.axhline(1, color="black", linestyle="--")
+# # cbar = plt.colorbar(mpl.cm.ScalarMappable(cmap=cmap), label="max loss", ticks=list(np.linspace(0, 1, 7)))
+# # cbar.ax.set_yticklabels([f"{i:.2f}" for i in np.linspace(min_loss, max_loss, 7)])
+# plt.title(f"Losses when you mix random directions")
+# plt.xlabel("alpha")
+# plt.ylabel("loss")
 # %%
-# best_so_far = 0
-# for a in range(3,11):
-#     for b in range(a+1,11):
-#         ccs_mix = CCS(neg_hs_train, pos_hs_train, along=2 * dirs[b] + dirs[a], device=device, lbfgs=True, ntries=1, weight_decay=0)
-#         lossx, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
-#         ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0] + 2 * dirs[a], device=device, lbfgs=True, ntries=1, weight_decay=0)
-#         lossy, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
-#         ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0] + 2 * dirs[b], device=device, lbfgs=True, ntries=1, weight_decay=0)
-#         lossz, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
-#         if min(lossx, lossy, lossz) > best_so_far:
-#             best_so_far = min(lossx, lossy, lossz)
-#             print(a,b, best_so_far)
-#             print()
+best_so_far = 0
+for a in range(3,11):
+    for b in range(a+1,11):
+        ccs_mix = CCS(neg_hs_train, pos_hs_train, along=2 * dirs[b] + dirs[a], device=device, lbfgs=True, ntries=1, weight_decay=0)
+        lossx, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+        ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0] + 2 * dirs[a], device=device, lbfgs=True, ntries=1, weight_decay=0)
+        lossy, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+        ccs_mix = CCS(neg_hs_train, pos_hs_train, along=dirs[0] + 2 * dirs[b], device=device, lbfgs=True, ntries=1, weight_decay=0)
+        lossz, _, _ = ccs_mix.repeated_train(neg_hs_test, pos_hs_test, y_test, verbose=False)
+        if min(lossx, lossy, lossz) > best_so_far:
+            best_so_far = min(lossx, lossy, lossz)
+            print(a,b, best_so_far)
+            print()
 #%%
 # %%
 # increase plt size
