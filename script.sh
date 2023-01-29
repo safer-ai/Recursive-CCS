@@ -1,16 +1,30 @@
 #!/bin/bash
 
-for i in {0..3}; do
-    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 0 --run_name notrain_uqa_all_30_$i;
+# python generation_main.py --model gpt-neo-125M --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
+
+models=("unifiedqa-t5-11b" "deberta-v2-xxlarge-mnli")
+
+for model in "${models[@]}"; do
+    python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
 done
 
-list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
-for w in "${list[@]}"; do
-    for i in {0..3}; do
-        echo $w ${w#*.}
-        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_all_30_w${w#*.}_$i;
-    done
+gpt_models=("gpt-neo-125M" "gpt-neo-2.7B" "gpt-j-6B")
+
+for model in "${gpt_models[@]}"; do
+    python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --save_all_layers
 done
+
+# for i in {0..3}; do
+#     python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 0 --run_name notrain_uqa_all_30_$i;
+# done
+
+# list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
+# for w in "${list[@]}"; do
+#     for i in {0..3}; do
+#         echo $w ${w#*.}
+#         python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_all_30_w${w#*.}_$i;
+#     done
+# done
 
 # list=(0.1 0.03 0.01 0.003 0.001)
 # for w in "${list[@]}"; do
@@ -129,20 +143,20 @@ done
 #     python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb --  --ntries 10 --reciters 30 --nepochs 1000  --run_name uqa_imdb_30_orig_$i;
 # done
 
-for l in $(seq 0 4 12)
-do
-    python generate_ccs_dirs_main.py --model_name gpt-neo-125M --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name neo125_imdb_orig_30_0/layer$l;
-done
+# for l in $(seq 0 4 12)
+# do
+#     python generate_ccs_dirs_main.py --model_name gpt-neo-125M --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name neo125_imdb_orig_30_0/layer$l;
+# done
 
-for l in $(seq 0 4 32)
-do
-    python generate_ccs_dirs_main.py --model_name gpt-neo-2.7B --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name neo27_imdb_orig_30_0/layer$l;
-done
+# for l in $(seq 0 4 32)
+# do
+#     python generate_ccs_dirs_main.py --model_name gpt-neo-2.7B --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name neo27_imdb_orig_30_0/layer$l;
+# done
 
-for l in $(seq 0 4 28)
-do
-    python generate_ccs_dirs_main.py --model_name gpt-j-6B --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name gptj_imdb_orig_30_0/layer$l;
-done
+# for l in $(seq 0 4 28)
+# do
+#     python generate_ccs_dirs_main.py --model_name gpt-j-6B --layer $l -- --ntries 10 --reciters 30 --nepochs 1000  --run_name gptj_imdb_orig_30_0/layer$l;
+# done
 
 # for i in {0..20}
 # do

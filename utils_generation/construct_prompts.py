@@ -34,6 +34,13 @@ label_dict = {
     "qnli": ["yes", "no"],  # represent whether entail
     "piqa": ["solution 1", "solution 2"],
     "story-cloze": ["choice 1", "choice 2"],
+    "tweet-eval-sentiment": ["negative", "neutral", "positive"],
+    "tweet-eval-emotion": ['anger', 'joy', 'optimism', 'sadness'],
+}
+
+bad_prompts = {
+    "copa": [1, 5],
+    "ag-news": [0, 4, 6],
 }
 
 
@@ -57,59 +64,6 @@ prompt_dict = {
             "Consider the following example: ''' {} '''\nBetween {} and {}, which is the sentiment of this example?",
             ["content", "0", "1"],
         ],
-    ],
-    "ag-news": [
-        [
-            "Consider the following example: ''' {} '''\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, the topic of this example is ",
-            ["text", "0", "1"],
-        ],
-        [
-            "Consider the following example: ''' {} '''\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, what is the topic of this example?",
-            ["text", "0", "1"],
-        ],
-        [
-            "Consider the following example: ''' {} '''\nWhich is the topic of this example, choice 1: {}, or choice 2: {}?",
-            ["text", "0", "1"],
-        ],
-        [
-            "{}\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, the topic of this example is ",
-            ["text", "0", "1"],
-        ],
-        [
-            "{}\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, what is the topic of this example?",
-            ["text", "0", "1"],
-        ],
-        ["{}\nWhich is the topic of this example, choice 1: {}, or choice 2: {}?", ["text", "0", "1"]],
-        ["{}\nWhat label best describes this news article, choice 1: {}, or choice 2: {}?", ["text", "0", "1"]],
-        [
-            "{}\nWhich section of a newspaper would this article likely appear in, choice 1: {}, or choice 2: {}?",
-            ["text", "0", "1"],
-        ],
-    ],
-    "dbpedia-14": [
-        [
-            "Consider the following example: ''' {} '''\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, the topic of this example is ",
-            ["content", "0", "1"],
-        ],
-        [
-            "Consider the following example: ''' {} '''\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, what is the topic of this example?",
-            ["content", "0", "1"],
-        ],
-        [
-            "Consider the following example: ''' {} '''\nWhich is the topic of this example, choice 1: {}, or choice 2: {}?",
-            ["content", "0", "1"],
-        ],
-        [
-            "{}\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, the topic of this example is ",
-            ["content", "0", "1"],
-        ],
-        [
-            "{}\nChoice 1: {}. Choice 2: {}.Between choice 1 and choice 2, what is the topic of this example?",
-            ["content", "0", "1"],
-        ],
-        ["{}\nWhich is the topic of this example, choice 1: {}, or choice 2: {}?", ["content", "0", "1"]],
-        ["{}\nWhat category does the paragraph belong to, choice 1: {}, or choice 2: {}?", ["content", "0", "1"]],
-        ["{}\nWhat label best describes this paragraph, choice 1: {}, or choice 2: {}?", ["content", "0", "1"]],
     ],
     "story-cloze": [
         [
@@ -326,18 +280,14 @@ My dad answered this question incorrectly.",
 
 class MyPrompts:
     def __init__(self, set_name):
+        self.raw_set_name = set_name
         self.set_name = set_name.replace("-", "_")
         self.prompt_dict = prompt_dict[set_name] if set_name in prompt_dict.keys() else []
         self.label_dict = label_dict[set_name]
-
-        if set_name in ["ag-news", "dbpedia-14"]:
-            self.nomodule = True
-            self.moudle = None
-        else:
-            self.nomodule = False
-            from utils_generation.load_utils import getLoadName
-
-            self.module = DatasetTemplates(*getLoadName(set_name))
+        
+        from utils_generation.load_utils import getLoadName
+        self.nomodule = False
+        self.module = DatasetTemplates(*getLoadName(set_name))
 
     def getGlobalPromptsNum(set_name_list):
         from utils_generation.load_utils import getLoadName
@@ -347,10 +297,8 @@ class MyPrompts:
             num = 0
             if set_name in prompt_dict.keys():
                 num += len(prompt_dict[set_name])
-            if set_name not in ["ag-news", "dbpedia-14"]:
-                num += len(DatasetTemplates(*getLoadName(set_name)).all_template_names)
-            if set_name == "copa":
-                num -= 4  # do not use the last four prompts
+            num += len(DatasetTemplates(*getLoadName(set_name)).all_template_names)
+            num -= len(bad_prompts.get(set_name, []))  # do not use the bad prompts
             res.append(num)
 
         return res
@@ -358,12 +306,12 @@ class MyPrompts:
     def getPromptsNum(self):
         res = len(self.prompt_dict) if self.nomodule else len(self.module.all_template_names) + len(self.prompt_dict)
         # do not use the last four prompts
-        return res if self.set_name != "copa" else res - 4
+        return res - len(bad_prompts.get(self.raw_set_name, []))
 
     # qaexamples is tuple (qlist, alist), and these 5-len examples are fixed across the whole run.
     def apply(self, example, prompt_idx, candidate, qaexamples):
         """
-        Candidate is a binary list with possible labels
+        Candidate is a list with possible labels
         """
 
         tmp = deepcopy(example)
@@ -372,16 +320,21 @@ class MyPrompts:
         # Low idx corresponds to T0's prompt
         if prompt_idx < self.getPromptsNum() - len(self.prompt_dict):
             idx = prompt_idx
-            func = self.module[self.module.all_template_names[idx]]
-            tmp[lbl_tag] = candidate[0] + int(self.set_name == "story_cloze")
-            res0 = func.apply(tmp)
-            tmp[lbl_tag] = candidate[1] + int(self.set_name == "story_cloze")
-            res1 = func.apply(tmp)
+            possibles_prompts = [p for i,p in enumerate(self.module.all_template_names) if i not in bad_prompts.get(self.raw_set_name, [])]
+            func = self.module[possibles_prompts[idx]]
+            
+            results = []
+            for c in candidate:
+                tmp[lbl_tag] = c + int(self.set_name == "story_cloze")
+                results.append(func.apply(tmp))
 
             # return the question and the list of labels
-            return res0[0], [res0[1], res1[1]]
+            return results[0][0], [r[1] for r in results]
 
         else:  # Use personal prompt
+            if len(candidate) != 2:
+                raise NotImplementedError("Only support binary classification for now for custom prompts")
+            
             idx = prompt_idx - (self.getPromptsNum() - len(self.prompt_dict))
             template, token = self.prompt_dict[idx][0], self.prompt_dict[idx][1]
             formatter = []
@@ -396,35 +349,11 @@ class MyPrompts:
                         formatter.append(qaexamples[0].loc[idx][typ])
                 else:
                     formatter.append(self.label_dict[candidate[int(w)]] if w in ["0", "1"] else tmp[w])
-            # token = [w if w not in ["0", "1"]
-            #          else candidate[int(w)] for w in token]
-            # formatter = [tmp[w] if type(
-            #     w) != int else self.label_dict[w] for w in token]
             question = template.format(*formatter)
             if self.set_name not in ["ag_news", "dbpedia_14"]:
                 return question, [self.label_dict[w] for w in candidate]
             else:
                 return question, ["choice 1", "choice 2"]
-
-
-def genCandidate(label, label_num):
-    """
-    When len(candicate) is larger than 2, randomly select the correctness
-    Then randomly select the candidate, and return the true label
-    """
-    if label_num == 2:
-        return label, [0, 1]
-    else:
-        lbl = np.random.randint(2)
-
-        candidate = list(range(label_num))
-        candidate.pop(label)
-        # correct, incorrect
-        selection = [label, random.sample(candidate, 1)[0]]
-        if lbl == 1:
-            selection.reverse()
-
-        return lbl, selection
 
 
 def checkLengthExceed(tokenizer, str_list):
@@ -472,18 +401,17 @@ def constructPrompt(set_name, frame, prompt_idx, mdl_name, tokenizer, max_num, c
     """
     According to the prompt idx and set_name, return corresponding construction
     Will change according to model type, i.e. for Bert model will add [SEP] in the middle
-    Return: A dataframe, with `null`, `0`, `1`, `label`, `selection`, which should be save with hidden states together
+    Return: A dataframe, with `null`, `0`, ..., `k`, `label`, which should be save with hidden states together
     """
 
     prompter = MyPrompts(set_name)
 
     result = {
         "null": [],
-        "0": [],
-        "1": [],
         "label": [],
-        "selection": [],
     }
+    for k in range(len(label_dict[set_name])):
+        result[str(k)] = []
 
     # This is always in range(#num_label)
     labels = (
@@ -491,7 +419,7 @@ def constructPrompt(set_name, frame, prompt_idx, mdl_name, tokenizer, max_num, c
         if set_name != "story-cloze"
         else [w - 1 for w in frame["answer_right_ending"].to_list()]
     )
-    label_num = len(set(labels))
+    candidates = list(range(len(set(labels))))
 
     # For possibly used examples, we take from the frame. We try to avoid using the same examples, and take at the end of the frame. We take the last 5 examples and select the one with least length.
     eg_start_idx = len(frame) - 5
@@ -499,8 +427,7 @@ def constructPrompt(set_name, frame, prompt_idx, mdl_name, tokenizer, max_num, c
     # This is the correct label list
     eg_a = []
     for w in range(eg_start_idx, eg_start_idx + 5):
-        label, selection = genCandidate(labels[w], label_num)
-        eg_a.append(selection[label])  #  append the correct answer
+        eg_a.append(labels[w])  #  append the correct answer
     qa_examples = (eg_q, eg_a)
 
     for idx in range(len(frame)):
@@ -509,11 +436,8 @@ def constructPrompt(set_name, frame, prompt_idx, mdl_name, tokenizer, max_num, c
         if len(result["null"]) >= max_num:
             break
 
-        label, selection = genCandidate(labels[idx], label_num)
-
         # Get the question and Answer List
-        # question, ans_lis = formatExample(set_name, frame.loc[idx], prompt_idx, selection)
-        question, ans_lis = prompter.apply(frame.loc[idx], prompt_idx, selection, qa_examples)
+        question, ans_lis = prompter.apply(frame.loc[idx], prompt_idx, candidates, qa_examples)
 
         concat_data_list = [concatAnswer(question, w, mdl_name, confusion) for w in ans_lis]
         if checkLengthExceed(tokenizer, concat_data_list):
@@ -521,10 +445,8 @@ def constructPrompt(set_name, frame, prompt_idx, mdl_name, tokenizer, max_num, c
 
         # append to the result
         result["null"].append(concatAnswer(question, "", mdl_name, confusion))
-        for i in range(2):
+        for i in range(len(ans_lis)):
             result[str(i)].append(concat_data_list[i])
-        result["label"].append(label)
-
-        result["selection"].append(ans_lis)
+        result["label"].append(labels[idx])
 
     return pd.DataFrame(result)

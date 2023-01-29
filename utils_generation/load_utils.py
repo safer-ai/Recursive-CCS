@@ -17,7 +17,7 @@ import os
 import pandas as pd
 from datasets import load_dataset
 from utils_generation.construct_prompts import constructPrompt, MyPrompts
-from utils_generation.save_utils import saveFrame, getDir
+from utils_generation.save_utils import getDir
 from pathlib import Path
 
 
@@ -106,14 +106,17 @@ def get_balanced_num(total_num, lis_len):
 
 
 def getLoadName(set_name):
+    set_name_ = set_name.replace("-", "_")
     if set_name in ["imdb", "amazon-polarity", "ag-news", "dbpedia-14", "piqa"]:
-        return [set_name.replace("-", "_")]
+        return [set_name_]
     elif set_name in ["copa", "rte", "boolq"]:
-        return ["super_glue", set_name.replace("-", "_")]
+        return ["super_glue", set_name_]
     elif set_name in ["qnli"]:
-        return ["glue", set_name.replace("-", "_")]
+        return ["glue", set_name_]
     elif set_name == "story-cloze":
         return ["story_cloze", "2016"]
+    elif set_name in ["tweet-eval-sentiment", "tweet-eval-emotion"]:
+        return ["tweet_eval", set_name.split("-")[2]]
 
 
 def loadFromDatasets(set_name, cache_dir, max_num):
@@ -126,7 +129,7 @@ def loadFromDatasets(set_name, cache_dir, max_num):
     else:
         raw_set = load_dataset(*getLoadName(set_name), data_dir="./datasets/rawdata")
 
-    if set_name in ["imdb", "amazon-polarity", "ag-news", "dbpedia-14"]:
+    if set_name in ["imdb", "amazon-polarity", "ag-news", "dbpedia-14", "tweet-eval-sentiment", "tweet-eval-emotion"]:
         token_list = ["test", "train"]
     elif set_name in ["copa", "rte", "boolq", "piqa", "qnli"]:
         token_list = ["validation", "train"]
@@ -193,7 +196,7 @@ def loadDatasets(args, tokenizer):
         # if complete dataset exists and reload == False, will directly load this dataset
         # Otherwise, load existing raw dataset or reload / load new raw sets
         # notice that this is just the `raw data`, which is a dict or whatever
-        dataset_name_w_num = "{}_{}_prompt{}".format(set_name, max_num, prompt_idx)
+        dataset_name_w_num = "{}_{}_prompt{}_nlabels".format(set_name, max_num, prompt_idx)
         complete_path = getDir(dataset_name_w_num, args)
 
         if reload == False and os.path.exists(os.path.join(complete_path, "frame.csv")):

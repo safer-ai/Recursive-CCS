@@ -9,7 +9,9 @@
     "boolq",
     "qnli",
     "piqa",
-    "story-cloze"
+    "story-cloze",
+    "tweet-eval-emotion",
+    "tweet-eval-sentiment"
   ],
   "registered_models": [
     "t5-11b",

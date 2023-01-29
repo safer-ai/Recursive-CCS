@@ -36,9 +36,15 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
             if args.print_more:
                 print("Start {}, length = {}".format(key, len(frame)))
 
+            num_labels = len(frame.columns) - 2
+            print("num_labels: {}".format(num_labels), "columns: {}".format(frame.columns))
+            labels = [str(k) for k in range(num_labels)]
+            
             # This part corresponds to zero-shot accuracy calculation
             # as well as the logits calculation
             if args.cal_zeroshot or args.cal_logits:
+                raise NotImplementedError("This part is not implemented yet.")
+                
                 log_probs_list = []
                 logits_list = []
 
@@ -106,7 +112,7 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
 
             # This part corresponds to hidden states generation
             if args.cal_hiddenstates:
-                hidden_states = [[], []]
+                hidden_states = [[] for _ in range(num_labels)]
                 if args.print_more:
                     print(
                         "Generating {} hidden states for {}. Layer = {}".format(
@@ -129,7 +135,7 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
                     # calculate the hidden states
                     if "T0" in mdl_name or "unifiedqa" in mdl_name or "t5" in mdl_name:
                         if args.states_location == "encoder":
-                            ids_paired = [tokenize(getDataPoint(frame, idx, w)) for w in ["0", "1"]]
+                            ids_paired = [tokenize(getDataPoint(frame, idx, w)) for w in labels]
                             hidden_states_paired = [
                                 model(ids, labels=pad_answer, output_hidden_states=True).encoder_hidden_states
                                 for ids in ids_paired
@@ -146,7 +152,7 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
                             ]
                     elif "gpt" in mdl_name or "bert" in mdl_name:
                         appender = " " + str(tokenizer.eos_token) if "gpt" in mdl_name else ""
-                        ids_paired = [tokenize(getDataPoint(frame, idx, w) + appender) for w in ["0", "1"]]
+                        ids_paired = [tokenize(getDataPoint(frame, idx, w) + appender) for w in labels]
                         # Notice that since gpt and bert only have either decoder or encoder, we don't need to specify which one to use.
                         hidden_states_paired = [
                             model(ids, output_hidden_states=True).hidden_states for ids in ids_paired
@@ -155,7 +161,7 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
                         raise NotImplementedError("model {} is not supported!".format(mdl_name))
 
                     # extract the corresponding token
-                    for i in range(2):
+                    for i in range(num_labels):
                         # shape (layer * hid_dim)
                         hidden_states[i].append(
                             np.stack(
@@ -167,7 +173,7 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
                 # for each list, stack them to `num_data * layer * hid_dim`
                 hidden_states = [np.stack(w, axis=0) for w in hidden_states]
 
-                saveArray(hidden_states, ["0", "1"], key, args)
+                saveArray(hidden_states, labels, key, args)
 
                 if args.print_more:
                     print("Finish generating hidden states for {} data in {}.".format(len(frame), key))

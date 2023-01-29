@@ -13,15 +13,15 @@ def getDir(dataset_name_w_num, args):
     return os.path.join(args.save_base_dir, d)
 
 
-def saveFrame(frame_dict, args):
-    Path(args.save_base_dir).mkdir(parents=True, exist_ok=True)
-    for key, frame in frame_dict.items():
-        directory = getDir(key, args)
-        Path(directory).mkdir(parents=True, exist_ok=True)
+# def saveFrame(frame_dict, args):
+#     Path(args.save_base_dir).mkdir(parents=True, exist_ok=True)
+#     for key, frame in frame_dict.items():
+#         directory = getDir(key, args)
+#         Path(directory).mkdir(parents=True, exist_ok=True)
 
-        frame.to_csv(os.path.join(directory, "frame.csv"), index=False)
+#         frame.to_csv(os.path.join(directory, "frame.csv"), index=False)
 
-    print("Successfully saving datasets to each directory.")
+#     print("Successfully saving datasets to each directory.")
 
 
 def saveArray(array_list, typ_list, key, args):
