@@ -557,7 +557,7 @@ class CCS(object):
         device="cuda",
         linear=True,
         weight_decay=0.01,
-        var_normalize=False,
+        var_normalize=True,
         constraints=None,
         along=None,
         lbfgs=False,

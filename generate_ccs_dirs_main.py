@@ -52,7 +52,6 @@ def main(args, generation_args):
             verbose=args.verbose,
             device=args.ccs_device,
             weight_decay=args.weight_decay,
-            var_normalize=args.var_normalize,
             lbfgs=args.lbfgs,
             constraints=constraints,
         )
@@ -98,7 +97,6 @@ if __name__ == "__main__":
     parser.add_argument("--ccs_device", type=str, default="cuda")
     parser.add_argument("--linear", action="store_true")
     parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--var_normalize", action="store_true")
     parser.add_argument("--lbfgs", action="store_true")
     parser.add_argument("--run_name", type=str, default="")
     args = parser.parse_args(generation_argv + evaluation_argv)
