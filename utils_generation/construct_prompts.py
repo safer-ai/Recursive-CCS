@@ -35,7 +35,7 @@ label_dict = {
     "piqa": ["solution 1", "solution 2"],
     "story-cloze": ["choice 1", "choice 2"],
     "tweet-eval-sentiment": ["negative", "neutral", "positive"],
-    "tweet-eval-emotion": ['anger', 'joy', 'optimism', 'sadness'],
+    "tweet-eval-emotion": ["anger", "joy", "optimism", "sadness"],
 }
 
 bad_prompts = {
@@ -284,8 +284,9 @@ class MyPrompts:
         self.set_name = set_name.replace("-", "_")
         self.prompt_dict = prompt_dict[set_name] if set_name in prompt_dict.keys() else []
         self.label_dict = label_dict[set_name]
-        
+
         from utils_generation.load_utils import getLoadName
+
         self.nomodule = False
         self.module = DatasetTemplates(*getLoadName(set_name))
 
@@ -320,9 +321,13 @@ class MyPrompts:
         # Low idx corresponds to T0's prompt
         if prompt_idx < self.getPromptsNum() - len(self.prompt_dict):
             idx = prompt_idx
-            possibles_prompts = [p for i,p in enumerate(self.module.all_template_names) if i not in bad_prompts.get(self.raw_set_name, [])]
+            possibles_prompts = [
+                p
+                for i, p in enumerate(self.module.all_template_names)
+                if i not in bad_prompts.get(self.raw_set_name, [])
+            ]
             func = self.module[possibles_prompts[idx]]
-            
+
             results = []
             for c in candidate:
                 tmp[lbl_tag] = c + int(self.set_name == "story_cloze")
@@ -334,7 +339,7 @@ class MyPrompts:
         else:  # Use personal prompt
             if len(candidate) != 2:
                 raise NotImplementedError("Only support binary classification for now for custom prompts")
-            
+
             idx = prompt_idx - (self.getPromptsNum() - len(self.prompt_dict))
             template, token = self.prompt_dict[idx][0], self.prompt_dict[idx][1]
             formatter = []

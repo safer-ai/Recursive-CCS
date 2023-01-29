@@ -13,9 +13,9 @@ from utils_generation.state_load_utils import getNegPosLabel
 #%%
 # model_name = "gpt-neo-2.7B"
 model_name = "unifiedqa-t5-11b"
-dataset_list = ["imdb","amazon-polarity","copa","ag-news","dbpedia-14","rte","boolq","qnli","piqa"]
+dataset_list = ["imdb", "amazon-polarity", "copa", "ag-news", "dbpedia-14", "rte", "boolq", "qnli", "piqa"]
 num_examples = 1000
-layer = None # None for unifiedqa
+layer = None  # None for unifiedqa
 
 css_path = "uqa_all_30_w0_"
 
@@ -28,8 +28,12 @@ assert Path(f"ccs_dirs/{css_path}0{layer_suffix}/ccs0.pt").exists()
 assert Path(f"ccs_dirs/{css_no_train_path}0{layer_suffix}/ccs0.pt").exists()
 
 layer_ = layer if layer is not None else -1
-neg_hs_train, pos_hs_train, y_train = getNegPosLabel(model_name, dataset_list, split="train", data_num=num_examples, layer=layer_)
-neg_hs_test, pos_hs_test, y_test = getNegPosLabel(model_name, dataset_list, split="test", data_num=num_examples, layer=layer_)
+neg_hs_train, pos_hs_train, y_train = getNegPosLabel(
+    model_name, dataset_list, split="train", data_num=num_examples, layer=layer_
+)
+neg_hs_test, pos_hs_test, y_test = getNegPosLabel(
+    model_name, dataset_list, split="test", data_num=num_examples, layer=layer_
+)
 # %%
 device = "cuda"
 ccs_perfs = ([], [])
@@ -42,7 +46,7 @@ nb_dirs = 30
 
 
 rdm_accs = []
-for i in list(map(str,range(100))) + [""]:
+for i in list(map(str, range(100))) + [""]:
     for j in range(100):
         path = Path(f"ccs_dirs/{css_no_train_path}{i}{layer_suffix}/ccs{j}.pt")
         if path.exists():
@@ -50,10 +54,10 @@ for i in list(map(str,range(100))) + [""]:
             ccs.load(path)
             acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
             rdm_accs.append(acc)
-rand_min, rand_max = np.mean(rdm_accs) - 2*np.std(rdm_accs), np.mean(rdm_accs) + 2*np.std(rdm_accs)
+rand_min, rand_max = np.mean(rdm_accs) - 2 * np.std(rdm_accs), np.mean(rdm_accs) + 2 * np.std(rdm_accs)
 
-for k,use_train in enumerate([False, True]):
-    for i in list(map(str,range(100))) + [""]:
+for k, use_train in enumerate([False, True]):
+    for i in list(map(str, range(100))) + [""]:
         path = Path(f"ccs_dirs/{css_path}{i}{layer_suffix}/ccs{nb_dirs-1}.pt")
         if path.exists():
             ccs_perfs[k].append([])
@@ -137,18 +141,22 @@ fig, axs = plt.subplots(gaps, 2, figsize=(4, 6), sharex=True, sharey=True)
 fig.tight_layout()
 for i, use_train in enumerate([False, True]):
     for j, dir_nb in enumerate(dir_nbs):
-        ax = axs[j,i]
+        ax = axs[j, i]
         path = Path(f"ccs_dirs/{css_path}0{layer_suffix}/ccs{dir_nb}.pt")
         ccs = CCS(neg_hs_train, pos_hs_train, constraints=constraints, device=device)
         ccs.load(path)
-        neg, pos, y =( *ccs.prepare(neg_hs_train, pos_hs_train), y_train) if use_train else (*ccs.prepare(neg_hs_test, pos_hs_test), y_test)
+        neg, pos, y = (
+            (*ccs.prepare(neg_hs_train, pos_hs_train), y_train)
+            if use_train
+            else (*ccs.prepare(neg_hs_test, pos_hs_test), y_test)
+        )
         with torch.no_grad():
             neg_activations = ccs.best_probe(neg)
             pos_activations = ccs.best_probe(pos)
         good_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y == 1]
         bad_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y == 0]
-        ax.hist(good_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="True")
-        ax.hist(bad_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="False")
+        ax.hist(good_activation.cpu().numpy(), bins=50, range=(0, 1), alpha=0.5, label="True")
+        ax.hist(bad_activation.cpu().numpy(), bins=50, range=(0, 1), alpha=0.5, label="False")
 for i, use_train in enumerate([False, True]):
     name = "train" if use_train else "test"
     axs[-1, i].set_xlabel(f"{name} activation")
@@ -168,8 +176,8 @@ with torch.no_grad():
     pos_activations = ccs.best_probe(pos)
 good_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 1]
 bad_activation = (0.5 * (pos_activations + (1 - neg_activations)))[y_train == 0]
-plt.hist(good_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="True")
-plt.hist(bad_activation.cpu().numpy(), bins=50, range=(0,1), alpha=0.5, label="False")
+plt.hist(good_activation.cpu().numpy(), bins=50, range=(0, 1), alpha=0.5, label="True")
+plt.hist(bad_activation.cpu().numpy(), bins=50, range=(0, 1), alpha=0.5, label="False")
 plt.title(f"Activation distribution on {css_path[:-1]}")
 plt.legend()
 

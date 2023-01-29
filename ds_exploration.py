@@ -17,7 +17,7 @@ label_key = "label"
 if "label" not in ds[train_key].features:
     label_key = "answer"
 n_labels = len(ds[train_key].features[label_key].names)
-print("n labels",n_labels )
+print("n labels", n_labels)
 for i in range(n_labels):
     print(ds[train_key].features[label_key].names[i], len([x for x in ds[train_key][label_key] if x == i]))
 
@@ -25,7 +25,7 @@ print(ds[train_key][0])
 templates = DatasetTemplates(ds_name, subset).templates
 
 idx = 25
-for i,template in enumerate(list(templates.values())):
+for i, template in enumerate(list(templates.values())):
     print("--")
     try:
         prompt, r = template.apply(ds[train_key][idx])

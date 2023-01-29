@@ -24,7 +24,7 @@ from pathlib import Path
 def loadModel(mdl_name, cache_dir, parallelize):
     print("-------- model and tokenizer --------")
     print("loading model and tokenizer. model name = {}, cache_dir = {}".format(mdl_name, cache_dir))
-    if mdl_name in ["gpt-neo-2.7B", "gpt-j-6B",  "gpt-neo-125M"]:
+    if mdl_name in ["gpt-neo-2.7B", "gpt-j-6B", "gpt-neo-125M"]:
         model = AutoModelForCausalLM.from_pretrained("EleutherAI/{}".format(mdl_name), cache_dir=cache_dir)
         tokenizer = AutoTokenizer.from_pretrained("EleutherAI/{}".format(mdl_name), cache_dir=cache_dir)
     elif mdl_name in ["gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"]:

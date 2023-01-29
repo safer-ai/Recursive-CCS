@@ -8,11 +8,24 @@ from utils_generation.state_load_utils import getNegPosLabel, models_layer_num
 from time import time
 from datetime import datetime
 
+
 def main(args, generation_args):
     # load hidden states and labels
-    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(generation_args.model_name, generation_args.dataset_name, split="train", data_num=generation_args.num_examples, layer=generation_args.layer)
-    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(generation_args.model_name, generation_args.dataset_name, split="test", data_num=generation_args.num_examples, layer=generation_args.layer)
-    
+    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(
+        generation_args.model_name,
+        generation_args.dataset_name,
+        split="train",
+        data_num=generation_args.num_examples,
+        layer=generation_args.layer,
+    )
+    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(
+        generation_args.model_name,
+        generation_args.dataset_name,
+        split="test",
+        data_num=generation_args.num_examples,
+        layer=generation_args.layer,
+    )
+
     # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
     print(neg_hs_train.shape)
     d = neg_hs_train.shape[1]
@@ -24,7 +37,7 @@ def main(args, generation_args):
     folder_name = args.run_name or str(hash(infos))[:20]
     path = Path("./ccs_dirs") / folder_name
     path.mkdir(parents=True, exist_ok=True)
-    
+
     st = time()
     perfs = []
 
@@ -47,12 +60,20 @@ def main(args, generation_args):
         perfs.append((loss, test_loss, test_acc))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
-        ccs.best_probe.constraints = torch.empty((0, d)).to(args.ccs_device) # empty the constraints before save
+        ccs.best_probe.constraints = torch.empty((0, d)).to(args.ccs_device)  # empty the constraints before save
         ccs.save((path / f"ccs{it}.pt").open("wb"))
-    
+
     runtime = time() - st
-    
-    json.dump({"args": arg_dict, "runtime": runtime, "timestamp": datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), "loss_testloss_testacc": perfs}, (path / "args.json").open("w"))
+
+    json.dump(
+        {
+            "args": arg_dict,
+            "runtime": runtime,
+            "timestamp": datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+            "loss_testloss_testacc": perfs,
+        },
+        (path / "args.json").open("w"),
+    )
 
 
 if __name__ == "__main__":
@@ -82,5 +103,5 @@ if __name__ == "__main__":
     parser.add_argument("--run_name", type=str, default="")
     args = parser.parse_args(generation_argv + evaluation_argv)
     print(args)
-    
+
     main(args, generation_args)

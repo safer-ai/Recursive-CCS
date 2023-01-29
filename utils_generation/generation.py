@@ -39,12 +39,12 @@ def calZeroAndHiddenStates(model, tokenizer, frame_dict, args):
             num_labels = len(frame.columns) - 2
             print("num_labels: {}".format(num_labels), "columns: {}".format(frame.columns))
             labels = [str(k) for k in range(num_labels)]
-            
+
             # This part corresponds to zero-shot accuracy calculation
             # as well as the logits calculation
             if args.cal_zeroshot or args.cal_logits:
                 raise NotImplementedError("This part is not implemented yet.")
-                
+
                 log_probs_list = []
                 logits_list = []
 

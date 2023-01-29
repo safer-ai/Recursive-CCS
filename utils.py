@@ -520,6 +520,7 @@ class LinearWithConstraints(nn.Module):
         with torch.no_grad():
             self.linear.weight[:] = project(self.linear.weight, self.constraints)
 
+
 class LinearAlong(nn.Module):
     def __init__(self, along):
         super().__init__()
@@ -527,18 +528,21 @@ class LinearAlong(nn.Module):
         self.coeffs = nn.Linear(n, 1)
         self.coeffs.weight.data = torch.ones_like(self.coeffs.weight.data) / n
         self.along = along
-    
+
     def forward(self, x):
         w = torch.einsum("nd,nh->hd", self.along, self.coeffs.weight)
         y = F.linear(x, w, self.coeffs.bias)
         return torch.sigmoid(y)
-            
+
+
 class Linear(nn.Module):
     def __init__(self, d) -> None:
         super().__init__()
         self.linear = nn.Linear(d, 1)
+
     def forward(self, x):
         return torch.sigmoid(self.linear(x))
+
 
 class CCS(object):
     def __init__(
@@ -636,7 +640,7 @@ class CCS(object):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
-        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test,raw=raw)
+        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test, raw=raw)
 
     def get_probe_acc(self, probe, x0_test, x1_test, y_test, raw=False):
         x0, x1 = self.prepare(x0_test, x1_test)

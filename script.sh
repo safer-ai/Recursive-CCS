@@ -1,18 +1,20 @@
 #!/bin/bash
 
+python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb -- --ntries 1 --reciters 4 --nepochs 4000 --lbfgs --weight_decay 0.001 --run_name lbfgs_attempts_4000
+
 # python generation_main.py --model gpt-neo-125M --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
 
-models=("unifiedqa-t5-11b" "deberta-v2-xxlarge-mnli")
+# models=("unifiedqa-t5-11b" "deberta-v2-xxlarge-mnli")
 
-for model in "${models[@]}"; do
-    python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
-done
+# for model in "${models[@]}"; do
+#     python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
+# done
 
-gpt_models=("gpt-neo-125M" "gpt-neo-2.7B" "gpt-j-6B")
+# gpt_models=("gpt-neo-125M" "gpt-neo-2.7B" "gpt-j-6B")
 
-for model in "${gpt_models[@]}"; do
-    python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --save_all_layers
-done
+# for model in "${gpt_models[@]}"; do
+#     python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --save_all_layers
+# done
 
 # for i in {0..3}; do
 #     python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 0 --run_name notrain_uqa_all_30_$i;
