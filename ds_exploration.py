@@ -1,6 +1,6 @@
 #%%
 from datasets import load_dataset
-from promptsource.templates import DatasetTemplates # type: ignore
+from promptsource.templates import DatasetTemplates  # type: ignore
 
 ds_name = "amazon_polarity"
 subset = None

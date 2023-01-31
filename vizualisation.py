@@ -1,7 +1,7 @@
 #%%
 import torch
 import numpy as np
-from matplotlib import pyplot as plt # type: ignore
+from matplotlib import pyplot as plt  # type: ignore
 
 # %%
 x0_means = torch.tensor([[1.0, 0.0], [0.0, 1.0]])

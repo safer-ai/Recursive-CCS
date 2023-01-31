@@ -13,13 +13,13 @@ from utils_generation.state_load_utils import getActsLabel
 #%%
 # model_name = "gpt-neo-2.7B"
 model_name = "unifiedqa-t5-11b"
-dataset_list = ["imdb","amazon-polarity","copa","ag-news","dbpedia-14","rte","boolq","qnli","piqa"]
+dataset_list = ["imdb", "amazon-polarity", "copa", "ag-news", "dbpedia-14", "rte", "boolq", "qnli", "piqa"]
 # dataset_list = ["ag-news", "dbpedia-14", "tweet-eval-emotion", "tweet-eval-sentiment", "amazon-polarity"]
 # dataset_list = ["amazon-polarity"]
 num_examples = 1000
 layer = None  # None for unifiedqa
 
-raw=True
+raw = True
 # css_path = "uqa_n_all_30_w001_i0__"
 # css_path = "uqa_n_all_30_w003_"
 css_path = "uqa_all_30_w0_"
@@ -39,8 +39,8 @@ assert Path(f"ccs_dirs/{css_no_train_path}0{layer_suffix}/ccs0.pt").exists(), cs
 
 nlabels = "_n_" in css_path
 layer_ = layer if layer is not None else -1
-train_ds = getActsLabel(model_name, dataset_list, split="train", data_num=num_examples, layer=layer_,nlabels=nlabels)
-test_ds = getActsLabel(model_name, dataset_list, split="test", data_num=num_examples, layer=layer_,nlabels=nlabels)
+train_ds = getActsLabel(model_name, dataset_list, split="train", data_num=num_examples, layer=layer_, nlabels=nlabels)
+test_ds = getActsLabel(model_name, dataset_list, split="test", data_num=num_examples, layer=layer_, nlabels=nlabels)
 # %%
 device = "cuda"
 ccs_perfs = ([], [])
@@ -53,7 +53,15 @@ nb_dirs = 30
 
 constant_guess_loss = 0
 along = torch.randn((1, d)).to(device)
-ccs = CCS(train_ds, along=along, device=device, lbfgs=True, weight_decay=0, ntries=1,informative_strength=informative_strength)
+ccs = CCS(
+    train_ds,
+    along=along,
+    device=device,
+    lbfgs=True,
+    weight_decay=0,
+    ntries=1,
+    informative_strength=informative_strength,
+)
 loss, test_loss, test_acc = ccs.repeated_train(test_ds)
 
 
@@ -78,14 +86,14 @@ for k, use_train in enumerate([False, True]):
             ccs_loss[k].append([])
             for j in range(nb_dirs):
                 path = Path(f"ccs_dirs/{css_path}{i}{layer_suffix}/ccs{j}.pt")
-                ccs = CCS(train_ds, constraints=constraints, device=device,informative_strength=informative_strength)
+                ccs = CCS(train_ds, constraints=constraints, device=device, informative_strength=informative_strength)
                 ccs.load(path)
                 if use_train:
                     perf = ccs.get_acc(train_ds, raw=raw)
-                    c, I, l = ccs.eval([x for x,y in train_ds])
+                    c, I, l = ccs.eval([x for x, y in train_ds])
                 else:
                     perf = ccs.get_acc(test_ds, raw=raw)
-                    c, I, l = ccs.eval([x for x,y in test_ds])
+                    c, I, l = ccs.eval([x for x, y in test_ds])
 
                 ccs_perfs[k][-1].append(perf)
                 ccs_consistency_loss[k][-1].append(c)
@@ -158,9 +166,9 @@ for i, use_train in enumerate([False, True]):
     for j, dir_nb in enumerate(dir_nbs):
         ax = axs[j, i]
         path = Path(f"ccs_dirs/{css_path}0{layer_suffix}/ccs{dir_nb}.pt")
-        
-        x,y = (train_ds if use_train else test_ds)[studied_ds]
-        ccs = CCS([(x,y)], constraints=constraints, device=device)
+
+        x, y = (train_ds if use_train else test_ds)[studied_ds]
+        ccs = CCS([(x, y)], constraints=constraints, device=device)
         random_subset = np.random.choice(len(x), 500)
         x, y = x[random_subset], y[random_subset]
         ccs.load(path)

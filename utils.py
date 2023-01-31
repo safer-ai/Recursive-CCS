@@ -9,13 +9,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 # make sure to install promptsource, transformers, and datasets!
-from tqdm import tqdm # type: ignore
-from transformers import (AutoModelForCausalLM, AutoModelForMaskedLM,
-                          AutoModelForSeq2SeqLM, AutoTokenizer)
+from tqdm import tqdm  # type: ignore
+from transformers import AutoModelForCausalLM, AutoModelForMaskedLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from datasets import load_dataset
-from utils_generation.state_load_utils import Dataset # type: ignore
+from utils_generation.state_load_utils import Dataset  # type: ignore
 
 ############# Model loading and result saving #############
 
@@ -103,7 +103,6 @@ def load_model(model_name: str, cache_dir=None, parallelize=False, device="cuda"
     return model, tokenizer, model_type
 
 
-
 ############# CCS #############
 class MLPProbe(nn.Module):
     def __init__(self, d: int):
@@ -172,33 +171,36 @@ class Linear(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.sigmoid(self.linear(x))
 
-NormData = tuple[np.ndarray, np.ndarray] # mean, std
+
+NormData = tuple[np.ndarray, np.ndarray]  # mean, std
 Probe = Union[Linear, LinearAlong, LinearWithConstraints, MLPProbe]
+
+
 class CCS(object):
     def __init__(
         self,
         train_ds: Dataset,
-        nepochs: int=1000,
-        ntries: int=10,
-        lr: float=1e-3,
-        batch_size: int=-1,
-        verbose: bool=False,
-        device: str="cuda",
-        linear:bool=True,
-        weight_decay:float=0.01,
-        var_normalize: bool=True,
-        constraints: Optional[torch.Tensor]=None,
-        along: Optional[torch.Tensor]=None,
-        lbfgs: bool=False,
-        informative_strength: float=1.,
+        nepochs: int = 1000,
+        ntries: int = 10,
+        lr: float = 1e-3,
+        batch_size: int = -1,
+        verbose: bool = False,
+        device: str = "cuda",
+        linear: bool = True,
+        weight_decay: float = 0.01,
+        var_normalize: bool = True,
+        constraints: Optional[torch.Tensor] = None,
+        along: Optional[torch.Tensor] = None,
+        lbfgs: bool = False,
+        informative_strength: float = 1.0,
     ):
         # data
         self.var_normalize = var_normalize
         # list of (batch, answer, hidden)
         # answer dims may vary
-        self.xs = [x for x,y in train_ds]
+        self.xs = [x for x, y in train_ds]
         self.train_ds = train_ds
-        self.norm_datas: list[NormData] = [(x.mean(0, keepdims=True), x.std(0, keepdims=True)) for x,y in train_ds]
+        self.norm_datas: list[NormData] = [(x.mean(0, keepdims=True), x.std(0, keepdims=True)) for x, y in train_ds]
         self.d = self.xs[0].shape[-1]
 
         # training
@@ -231,7 +233,7 @@ class CCS(object):
             self.probe = MLPProbe(self.d)
         self.probe.to(self.device)
 
-    def normalize(self, x: np.ndarray, norm_data: Optional[NormData]=None) -> np.ndarray:
+    def normalize(self, x: np.ndarray, norm_data: Optional[NormData] = None) -> np.ndarray:
         """
         Mean-normalizes the data x (of shape (n, a, d))
         If self.var_normalize, also divides by the standard deviation
@@ -241,7 +243,7 @@ class CCS(object):
             std: np.ndarray = x.std(axis=0, keepdims=True)
         else:
             mean, std = norm_data
-        
+
         normalized_x: np.ndarray = x - mean
         if self.var_normalize:
             normalized_x /= std
@@ -258,7 +260,10 @@ class CCS(object):
         """
         Returns xs as appropriate normalized tensors (rather than np arrays)
         """
-        return [torch.tensor(self.normalize(x, norm_data), dtype=torch.float, requires_grad=False, device=self.device) for x, norm_data in zip(xs, self.norm_datas)]
+        return [
+            torch.tensor(self.normalize(x, norm_data), dtype=torch.float, requires_grad=False, device=self.device)
+            for x, norm_data in zip(xs, self.norm_datas)
+        ]
 
     def get_loss(self, ps: list[torch.Tensor]) -> torch.Tensor:
         """
@@ -278,25 +283,27 @@ class CCS(object):
         total_loss = sum(((1 - p.max(1)[0]) ** 2).sum() for p in ps)
         return total_loss / num_samples
 
-    def get_acc(self, test_ds: Dataset, raw: bool=False) -> float:
+    def get_acc(self, test_ds: Dataset, raw: bool = False) -> float:
         """
         Computes accuracy for the current parameters on the given test inputs
         """
         return self.get_probe_acc(self.best_probe, test_ds, raw=raw)
 
-    def get_probe_acc(self, probe: Probe, test_ds: Dataset, raw: bool=False):
-        xs = [x for x,y in test_ds]
+    def get_probe_acc(self, probe: Probe, test_ds: Dataset, raw: bool = False):
+        xs = [x for x, y in test_ds]
         xs = self.prepare(xs)
         with torch.no_grad():
             ps: list[torch.Tensor] = [probe(x) for x in xs]
-        preds: list[np.ndarray] = [p.argmax(1).detach().cpu().numpy().astype(int)[:, 0] for p in ps] # same as below according to math
+        preds: list[np.ndarray] = [
+            p.argmax(1).detach().cpu().numpy().astype(int)[:, 0] for p in ps
+        ]  # same as below according to math
         # 0.5 * (p0 + (1 - p1)) < 0.5 <=> p0 + 1 - p1 < 1 <=> p0 < p1
         # print(ps[0][:10],"preds", preds[0][:10], "corrects", [y for x,y in test_ds][:10])
-        
+
         # avg_confidence = 0.5 * (p0 + (1 - p1))
         # print("avg_confidence", avg_confidence[:10])
         # predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        corrects: list[np.ndarray] = [(pred == y) for pred, y in zip(preds, [y for x,y in test_ds])]
+        corrects: list[np.ndarray] = [(pred == y) for pred, y in zip(preds, [y for x, y in test_ds])]
         num_samples: int = sum(p.shape[0] for p in ps)
         # print("corrects", corrects[:10], "num_samples", num_samples, "sum", sum(c.sum() for c in corrects))
         acc = sum(c.sum() for c in corrects) / num_samples
@@ -315,7 +322,7 @@ class CCS(object):
         and constraints are <x, d_i> = 0 for each i
         """
         raise NotImplementedError("this branch does not support training other than lbfgs yet")
-        
+
         x0, x1 = self.get_tensor_data()
 
         # set up optimizer
@@ -354,7 +361,7 @@ class CCS(object):
 
         return loss.detach().cpu().item()
 
-    def train_with_lbfgs(self, debug:bool=False):
+    def train_with_lbfgs(self, debug: bool = False):
         """
         Does a single training run of nepochs epochs
 
@@ -381,7 +388,7 @@ class CCS(object):
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
 
-        def closure(debug:bool=False):
+        def closure(debug: bool = False):
             if isinstance(self.probe, LinearWithConstraints):
                 self.probe.project()
             optimizer.zero_grad()
@@ -416,14 +423,14 @@ class CCS(object):
             self.probe.project()
         return loss.detach().cpu().item()
 
-    def repeated_train(self, test_ds:Dataset, additional_info:str="", verbose:bool=True):
+    def repeated_train(self, test_ds: Dataset, additional_info: str = "", verbose: bool = True):
         best_loss = np.inf
         best_test_loss = np.inf
         best_test_acc = 0
         for train_num in range(self.ntries):
             self.initialize_probe()
             loss = self.train_with_lbfgs() if self.lbfgs else self.train()
-            test_loss = self.eval_probe(self.probe, [x for x,y in test_ds])[2]
+            test_loss = self.eval_probe(self.probe, [x for x, y in test_ds])[2]
             test_acc = self.get_probe_acc(self.probe, test_ds, raw=True)
             train_acc = self.get_probe_acc(self.probe, self.train_ds, raw=True)
             if verbose:

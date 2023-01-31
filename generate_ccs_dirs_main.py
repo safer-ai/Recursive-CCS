@@ -1,10 +1,10 @@
 import sys
-from sklearn.linear_model import LogisticRegression # type: ignore
+from sklearn.linear_model import LogisticRegression  # type: ignore
 from utils import get_parser, CCS, assert_orthonormal
 import torch
 from pathlib import Path
 import json
-from utils_generation.state_load_utils import getActsLabel # type: ignore
+from utils_generation.state_load_utils import getActsLabel  # type: ignore
 from time import time
 from datetime import datetime
 

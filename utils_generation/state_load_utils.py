@@ -92,16 +92,18 @@ def loadHiddenStates(
                         layer:,
                     ]
                     for d in getNumberedDirList(w, "{}.npy")
-                ], axis=1
+                ],
+                axis=1,
             )
             for w in dir_list
         ]
     else:
         append_list = ["_" + location + str(layer) for _ in dir_list]
         hidden_states = [
-            np.stack([np.load(d) for d in getNumberedDirList(w, f"{{}}{app}.npy")], axis=1) for w, app in zip(dir_list, append_list)
+            np.stack([np.load(d) for d in getNumberedDirList(w, f"{{}}{app}.npy")], axis=1)
+            for w, app in zip(dir_list, append_list)
         ]
-    
+
     if not nlabels:
         for a in hidden_states:
             assert a.shape[1] == 2, "Only binary classification is supported for nlabels=False."
@@ -205,6 +207,7 @@ def getPair(target_dict, data_dict, permutation_dict, split="train"):
 
     return data, label
 
+
 def getPairs(target_dict, data_dict, permutation_dict, split="train"):
     split_idx = 0 if split == "train" else 1
     liss = []
@@ -222,6 +225,7 @@ def getPairs(target_dict, data_dict, permutation_dict, split="train"):
 
     return liss
 
+
 def getNegPosLabel(
     mdl_name,
     dataset_list,
@@ -235,7 +239,15 @@ def getNegPosLabel(
     nlabels=False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     data_dict, permutation_dict = getDic(
-        mdl_name, dataset_list, prefix, location, layer, prompt_dict, data_num, verbose, nlabels=nlabels,
+        mdl_name,
+        dataset_list,
+        prefix,
+        location,
+        layer,
+        prompt_dict,
+        data_num,
+        verbose,
+        nlabels=nlabels,
     )
     projection_dict = {key: range(len(data_dict[key])) for key in dataset_list}
     data, labels = getPair(projection_dict, data_dict, permutation_dict, split)
@@ -244,6 +256,7 @@ def getNegPosLabel(
     pos = data[:, 1, :]
 
     return neg, pos, labels
+
 
 def getActsLabel(
     mdl_name,
@@ -258,7 +271,15 @@ def getActsLabel(
     nlabels=True,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     data_dict, permutation_dict = getDic(
-        mdl_name, dataset_list, prefix, location, layer, prompt_dict, data_num, verbose, nlabels=nlabels,
+        mdl_name,
+        dataset_list,
+        prefix,
+        location,
+        layer,
+        prompt_dict,
+        data_num,
+        verbose,
+        nlabels=nlabels,
     )
     projection_dict = {key: range(len(data_dict[key])) for key in dataset_list}
     return getPairs(projection_dict, data_dict, permutation_dict, split)
