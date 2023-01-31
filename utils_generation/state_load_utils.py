@@ -231,7 +231,7 @@ def getNegPosLabel(
     data_num=1000,
     verbose=True,
     nlabels=False,
-):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     data_dict, permutation_dict = getDic(
         mdl_name, dataset_list, prefix, location, layer, prompt_dict, data_num, verbose, nlabels=nlabels,
     )
@@ -254,9 +254,9 @@ def getActsLabel(
     data_num=1000,
     verbose=True,
     nlabels=True,
-):
+) -> list[tuple[np.ndarray, np.ndarray]]:
     data_dict, permutation_dict = getDic(
-        mdl_name, dataset_list, prefix, location, layer, prompt_dict, data_num, "concat", verbose, nlabels=nlabels,
+        mdl_name, dataset_list, prefix, location, layer, prompt_dict, data_num, verbose, nlabels=nlabels,
     )
     projection_dict = {key: range(len(data_dict[key])) for key in dataset_list}
     return getPairs(projection_dict, data_dict, permutation_dict, split)

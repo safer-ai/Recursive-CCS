@@ -1,20 +1,98 @@
 #!/bin/bash
 
-python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb -- --ntries 1 --reciters 4 --nepochs 4000 --lbfgs --weight_decay 0.001 --run_name lbfgs_attempts_4000
+# python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name dbpedia-14 ag-news --num_examples 4000 --nlabels -- --ntries 6 --reciters 2 --nepochs 4000 --lbfgs --weight_decay 0.001 --run_name lbfgs_attempts_4000
 
-# python generation_main.py --model gpt-neo-125M --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
+# python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name amazon-polarity ag-news dbpedia-14 --num_examples 4000 --nlabels -- --ntries 10 --reciters 2 --nepochs 4000 --lbfgs --weight_decay 0.001 --run_name lbfgs_attempts_4000 --informative_strength 0.1
+# python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name amazon-polarity ag-news dbpedia-14 --num_examples 4000 --nlabels -- --ntries 10 --reciters 2 --nepochs 4000 --lbfgs --weight_decay 0.001 --run_name lbfgs_attempts_4000 --informative_strength 0
+
+# python generation_main.py --model gpt-neo-125M --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets imdb copa ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
 
 # models=("unifiedqa-t5-11b" "deberta-v2-xxlarge-mnli")
 
 # for model in "${models[@]}"; do
-#     python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
+#     python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets imdb copa ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity
 # done
 
-# gpt_models=("gpt-neo-125M" "gpt-neo-2.7B" "gpt-j-6B")
+# python generation_main.py --model unifiedqa-t5-11b --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets imdb
+# python generation_main.py --model deberta-v2-xxlarge-mnli --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets imdb tweet-eval-emotion tweet-eval-sentiment amazon-polarity
 
-# for model in "${gpt_models[@]}"; do
-#     python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --save_all_layers
-# done
+
+
+for i in {0..3}; do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 0 --lbfgs --run_name notrain_uqa_n_imdb_30_$i;
+done
+
+list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        echo $w ${w#*.}
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_n_imdb_30_w${w#*.}_$i;
+    done
+done
+
+for i in {0..3}; do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 0 --lbfgs --run_name notrain_uqa_n_amazon-polarity_30_$i;
+done
+
+list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        echo $w ${w#*.}
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_n_amazon-polarity_30_w${w#*.}_$i;
+    done
+done
+
+for i in {0..3}; do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 0 --lbfgs --run_name notrain_uqa_n_ag-news_30_$i;
+done
+
+list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        echo $w ${w#*.}
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_n_ag-news_30_w${w#*.}_$i;
+    done
+done
+
+for i in {0..3}; do
+    python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 0 --lbfgs --run_name notrain_uqa_n_all_30_$i;
+done
+
+list=(0.1 0.03 0.01 0.003 0.001 0.0003 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        echo $w ${w#*.}
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay $w --run_name uqa_n_all_30_w${w#*.}_$i;
+    done
+done
+
+
+list=(10 1 0.1 0.01 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay 0.001 --informative_strength $w --run_name uqa_n_ag-news_30_w001_i${w}__$i;
+    done
+done
+
+list=(10 1 0.1 0.01 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay 0.001 --informative_strength $w --run_name uqa_n_amazon-polarity_30_w001_i${w}__$i;
+    done
+done
+
+list=(10 1 0.1 0.01 0)
+for w in "${list[@]}"; do
+    for i in {0..3}; do
+        python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --num_examples 4000 --nlabels -- --ntries 1 --reciters 30 --nepochs 4000  --lbfgs --weight_decay 0.001 --informative_strength $w --run_name uqa_n_all_30_w001_i${w}__$i;
+    done
+done
+
+gpt_models=("gpt-neo-125M" "gpt-neo-2.7B" "gpt-j-6B")
+
+for model in "${gpt_models[@]}"; do
+    python generation_main.py --model $model --swipe --num_data 4000 --print_more --cal_zeroshot 0 --datasets imdb ag-news dbpedia-14 tweet-eval-emotion tweet-eval-sentiment amazon-polarity --save_all_layers
+done
 
 # for i in {0..3}; do
 #     python generate_ccs_dirs_main.py --model_name unifiedqa-t5-11b --dataset_name imdb amazon-polarity copa ag-news dbpedia-14 rte boolq qnli piqa -- --ntries 1 --reciters 30 --nepochs 0 --run_name notrain_uqa_all_30_$i;

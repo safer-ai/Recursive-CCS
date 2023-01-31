@@ -4,31 +4,33 @@ from utils import get_parser, load_all_generations, CCS, assert_orthonormal
 import torch
 from pathlib import Path
 import json
-from utils_generation.state_load_utils import getNegPosLabel, models_layer_num
+from utils_generation.state_load_utils import getNegPosLabel, getActsLabel
 from time import time
 from datetime import datetime
 
 
 def main(args, generation_args):
     # load hidden states and labels
-    neg_hs_train, pos_hs_train, y_train = getNegPosLabel(
+    train_ds = getActsLabel(
         generation_args.model_name,
         generation_args.dataset_name,
+        layer=generation_args.layer,
+        data_num=generation_args.num_examples,
+        nlabels=generation_args.nlabels,
         split="train",
-        data_num=generation_args.num_examples,
-        layer=generation_args.layer,
     )
-    neg_hs_test, pos_hs_test, y_test = getNegPosLabel(
+    test_ds = getActsLabel(
         generation_args.model_name,
         generation_args.dataset_name,
-        split="test",
-        data_num=generation_args.num_examples,
         layer=generation_args.layer,
+        data_num=generation_args.num_examples,
+        nlabels=generation_args.nlabels,
+        split="test",
     )
 
-    # Set up CCS. Note that you can usually just use the default args by simply doing ccs = CCS(neg_hs, pos_hs, y)
-    print(neg_hs_train.shape)
-    d = neg_hs_train.shape[1]
+    print([a.shape for a, y in train_ds])
+    # activations of shape (batch, answer, hidden)
+    d = train_ds[0][0].shape[-1]
     constraints = torch.empty((0, d)).to(args.ccs_device)
 
     arg_dict = vars(args)
@@ -43,8 +45,7 @@ def main(args, generation_args):
 
     for it in range(args.reciters):
         ccs = CCS(
-            neg_hs_train,
-            pos_hs_train,
+            train_ds,
             nepochs=args.nepochs,
             ntries=args.ntries,
             lr=args.lr,
@@ -53,9 +54,10 @@ def main(args, generation_args):
             device=args.ccs_device,
             weight_decay=args.weight_decay,
             lbfgs=args.lbfgs,
+            informative_strength=args.informative_strength,
             constraints=constraints,
         )
-        loss, test_loss, test_acc = ccs.repeated_train(neg_hs_test, pos_hs_test, y_test, additional_info=f"it {it} ")
+        loss, test_loss, test_acc = ccs.repeated_train(test_ds, additional_info=f"it {it} ")
         perfs.append((loss, test_loss, test_acc))
         constraints = torch.cat([constraints, ccs.get_direction()], dim=0)
         assert_orthonormal(constraints)
@@ -97,6 +99,7 @@ if __name__ == "__main__":
     parser.add_argument("--ccs_device", type=str, default="cuda")
     parser.add_argument("--linear", action="store_true")
     parser.add_argument("--weight_decay", type=float, default=0.01)
+    parser.add_argument("--informative_strength", type=float, default=1)
     parser.add_argument("--lbfgs", action="store_true")
     parser.add_argument("--run_name", type=str, default="")
     args = parser.parse_args(generation_argv + evaluation_argv)

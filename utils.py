@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from promptsource.templates import DatasetTemplates
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForMaskedLM, AutoModelForCausalLM
 from datasets import load_dataset
+import pandas as pd
 
 
 ############# Model loading and result saving #############
@@ -63,6 +64,7 @@ def get_parser():
     parser.add_argument(
         "--save_dir", type=str, default="generated_hidden_states", help="Directory to save the hidden states"
     )
+    parser.add_argument("--nlabels", action="store_true")
 
     return parser
 
@@ -547,8 +549,7 @@ class Linear(nn.Module):
 class CCS(object):
     def __init__(
         self,
-        x0,
-        x1,
+        train_ds,
         nepochs=1000,
         ntries=10,
         lr=1e-3,
@@ -561,12 +562,16 @@ class CCS(object):
         constraints=None,
         along=None,
         lbfgs=False,
+        informative_strength=1,
     ):
         # data
         self.var_normalize = var_normalize
-        self.x0 = self.normalize(x0)
-        self.x1 = self.normalize(x1)
-        self.d = self.x0.shape[-1]
+        # list of (batch, answer, hidden)
+        # answer dims may vary
+        self.xs = [x for x,y in train_ds]
+        self.train_ds = train_ds
+        self.norm_datas = [(x.mean(0, keepdims=True), x.std(0, keepdims=True)) for x,y in train_ds]
+        self.d = self.xs[0].shape[-1]
 
         # training
         self.nepochs = nepochs
@@ -577,6 +582,7 @@ class CCS(object):
         self.batch_size = batch_size
         self.weight_decay = weight_decay
         self.lbfgs = lbfgs
+        self.informative_strength = informative_strength
 
         # probe
         self.linear = linear
@@ -597,59 +603,75 @@ class CCS(object):
             self.probe = MLPProbe(self.d)
         self.probe.to(self.device)
 
-    def normalize(self, x):
+    def normalize(self, x, norm_data=None):
         """
-        Mean-normalizes the data x (of shape (n, d))
+        Mean-normalizes the data x (of shape (n, a, d))
         If self.var_normalize, also divides by the standard deviation
         """
-        normalized_x = x - x.mean(axis=0, keepdims=True)
+        if norm_data is None:
+            mean = x.mean(axis=0, keepdims=True)
+            std = x.std(axis=0, keepdims=True)
+        else:
+            mean, std = norm_data
+        
+        normalized_x = x - mean
         if self.var_normalize:
-            normalized_x /= normalized_x.std(axis=0, keepdims=True)
+            normalized_x /= std
 
         return normalized_x
 
     def get_tensor_data(self):
         """
-        Returns x0, x1 as appropriate tensors (rather than np arrays)
+        Returns self.xs as appropriate normalized tensors (rather than np arrays)
         """
-        x0 = torch.tensor(self.x0, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
-        return x0, x1
+        return self.prepare(self.xs)
 
-    def prepare(self, x0, x1):
+    def prepare(self, xs):
         """
-        Returns x0, x1 as appropriate tensors (rather than np arrays)
+        Returns xs as appropriate normalized tensors (rather than np arrays)
         """
-        x0 = torch.tensor(self.normalize(x0), dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.normalize(x1), dtype=torch.float, requires_grad=False, device=self.device)
-        return x0, x1
+        return [torch.tensor(self.normalize(x, norm_data), dtype=torch.float, requires_grad=False, device=self.device) for x, norm_data in zip(xs, self.norm_datas)]
 
-    def get_loss(self, p0, p1):
+    def get_loss(self, ps: list[torch.Tensor]):
         """
-        Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
+        Returns the CCS loss the probabilities on each dataset, each of shape (n, a) or (n, a, 1)
         """
-        return self.get_consistent_loss(p0, p1) + self.get_informative_loss(p0, p1)
+        return self.get_consistent_loss(ps) + self.informative_strength * self.get_informative_loss(ps)
 
-    def get_consistent_loss(self, p0, p1):
-        return ((p0 - (1 - p1)) ** 2).mean(0)
+    def get_consistent_loss(self, ps: list[torch.Tensor]):
+        # return ((p0 - (1 - p1)) ** 2).mean(0)
+        num_samples = sum(p.shape[0] for p in ps)
+        total_loss = sum(((1 - p.sum(1)) ** 2).sum() for p in ps)
+        return total_loss / num_samples
 
-    def get_informative_loss(self, p0, p1):
-        return (torch.min(p0, p1) ** 2).mean(0)
+    def get_informative_loss(self, ps: list[torch.Tensor]):
+        # return (torch.min(p0, p1) ** 2).mean(0)
+        num_samples = sum(p.shape[0] for p in ps)
+        total_loss = sum(((1 - p.max(1)[0]) ** 2).sum() for p in ps)
+        return total_loss / num_samples
 
-    def get_acc(self, x0_test, x1_test, y_test, raw=False):
+    def get_acc(self, test_ds, raw=False):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
-        return self.get_probe_acc(self.best_probe, x0_test, x1_test, y_test, raw=raw)
+        return self.get_probe_acc(self.best_probe, test_ds, raw=raw)
 
-    def get_probe_acc(self, probe, x0_test, x1_test, y_test, raw=False):
-        x0, x1 = self.prepare(x0_test, x1_test)
+    def get_probe_acc(self, probe, test_ds, raw=False):
+        xs = [x for x,y in test_ds]
+        xs = self.prepare(xs)
         with torch.no_grad():
-            p0, p1 = probe(x0), probe(x1)
-        avg_confidence = 0.5 * (p0 + (1 - p1))
+            ps = [probe(x) for x in xs]
+        preds = [p.argmax(1).detach().cpu().numpy().astype(int)[:, 0] for p in ps] # same as below according to math
+        # 0.5 * (p0 + (1 - p1)) < 0.5 <=> p0 + 1 - p1 < 1 <=> p0 < p1
+        # print(ps[0][:10],"preds", preds[0][:10], "corrects", [y for x,y in test_ds][:10])
+        
+        # avg_confidence = 0.5 * (p0 + (1 - p1))
         # print("avg_confidence", avg_confidence[:10])
-        predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        acc = (predictions == y_test).mean()
+        # predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
+        corrects = [(pred == y) for pred, y in zip(preds, [y for x,y in test_ds])]
+        num_samples = sum(p.shape[0] for p in ps)
+        # print("corrects", corrects[:10], "num_samples", num_samples, "sum", sum(c.sum() for c in corrects))
+        acc = sum(c.sum() for c in corrects) / num_samples
         # for i in [10,100,200, 500, 700, 800, 1000]:
         #     print(f"acc@{i}", (predictions[:i] == y_test[:i]).mean())
         if not raw:
@@ -664,6 +686,8 @@ class CCS(object):
         constraints is a tensor of shape (n, d) where n is the number of constraints
         and constraints are <x, d_i> = 0 for each i
         """
+        raise NotImplementedError("this branch does not support training other than lbfgs yet")
+        
         x0, x1 = self.get_tensor_data()
 
         # set up optimizer
@@ -709,7 +733,7 @@ class CCS(object):
         constraints is a tensor of shape (n, d) where n is the number of constraints
         and constraints are <x, d_i> = 0 for each i
         """
-        x0, x1 = self.get_tensor_data()
+        xs = self.get_tensor_data()
 
         # l2 with SGD is equivalent to weight decay
         # with l2, w = w - lr * (grad + l2 * w)
@@ -723,8 +747,8 @@ class CCS(object):
             self.probe.parameters(),
             line_search_fn="strong_wolfe",
             max_iter=self.nepochs,
-            tolerance_change=torch.finfo(x0.dtype).eps,
-            tolerance_grad=torch.finfo(x0.dtype).eps,
+            tolerance_change=torch.finfo(xs[0].dtype).eps,
+            tolerance_grad=torch.finfo(xs[0].dtype).eps,
         )
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
@@ -733,8 +757,8 @@ class CCS(object):
             if isinstance(self.probe, LinearWithConstraints):
                 self.probe.project()
             optimizer.zero_grad()
-            p0, p1 = self.probe(x0), self.probe(x1)
-            loss = self.get_loss(p0, p1)
+            ps = [self.probe(x) for x in xs]
+            loss = self.get_loss(ps)
 
             if debug:
                 print("loss", loss.item())
@@ -764,18 +788,19 @@ class CCS(object):
             self.probe.project()
         return loss.detach().cpu().item()
 
-    def repeated_train(self, x0_test, x1_test, y_test, additional_info="", verbose=True):
+    def repeated_train(self, test_ds, additional_info="", verbose=True):
         best_loss = np.inf
         best_test_loss = np.inf
         best_test_acc = 0
         for train_num in range(self.ntries):
             self.initialize_probe()
             loss = self.train_with_lbfgs() if self.lbfgs else self.train()
-            test_loss = self.eval_probe(self.probe, x0_test, x1_test)[2]
-            test_acc = self.get_probe_acc(self.probe, x0_test, x1_test, y_test)
+            test_loss = self.eval_probe(self.probe, [x for x,y in test_ds])[2]
+            test_acc = self.get_probe_acc(self.probe, test_ds, raw=True)
+            train_acc = self.get_probe_acc(self.probe, self.train_ds, raw=True)
             if verbose:
                 print(
-                    f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={test_loss:.5f} test_acc={test_acc:.5f} "
+                    f"{additional_info}try {train_num}: train_loss={loss:.5f} test_loss={test_loss:.5f} train_acc={train_acc:.5f} test_acc={test_acc:.5f} "
                 )
             if loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
@@ -785,42 +810,30 @@ class CCS(object):
 
         return best_loss, best_test_loss, best_test_acc
 
-    def eval(self, x0_test, x1_test):
+    def eval(self, xs):
         """
         return consistent loss, informative loss, and loss on the test set
         """
-        return self.eval_probe(self.best_probe, x0_test, x1_test)
+        return self.eval_probe(self.best_probe, xs)
 
-    def eval_probe(self, probe, x0_test, x1_test):
-        x0, x1 = self.prepare(x0_test, x1_test)
+    def eval_probe(self, probe, xs):
+        xs = self.prepare(xs)
+        with torch.no_grad():
+            # probe
+            ps = [probe(x) for x in xs]
 
-        batch_size = len(x0) if self.batch_size == -1 else self.batch_size
-        nbatches = len(x0) // batch_size
-
-        consistent_loss = 0
-        informative_loss = 0
-
-        for j in range(nbatches):
-            x0_batch = x0[j * batch_size : (j + 1) * batch_size]
-            x1_batch = x1[j * batch_size : (j + 1) * batch_size]
-
-            with torch.no_grad():
-                # probe
-                p0, p1 = probe(x0_batch), probe(x1_batch)
-
-                # get the corresponding loss
-                consistent_loss += self.get_consistent_loss(p0, p1).item() * len(x0_batch)
-                informative_loss += self.get_informative_loss(p0, p1).item() * len(x0_batch)
-        consistent_loss /= len(x0)
-        informative_loss /= len(x0)
-        return consistent_loss, informative_loss, consistent_loss + informative_loss
+            # get the corresponding loss
+            consistent_loss = self.get_consistent_loss(ps).item()
+            informative_loss = self.get_informative_loss(ps).item()
+            # print(f"consistent_loss={consistent_loss:.5f} informative_loss={informative_loss:.5f} ")
+            return consistent_loss, informative_loss, consistent_loss + self.informative_strength * informative_loss
 
     def save(self, path):
         torch.save(self.best_probe.state_dict(), path)
 
     def load(self, path):
         self.best_probe.load_state_dict(torch.load(path))
-        self.best_probe.to(self.device)
+        self.best_probe = self.best_probe.to(self.device)
 
     def get_direction(self):
         """

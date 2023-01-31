@@ -334,7 +334,11 @@ class MyPrompts:
                 results.append(func.apply(tmp))
 
             # return the question and the list of labels
-            return results[0][0], [r[1] for r in results]
+            try:
+                return results[0][0], [r[1] for r in results]
+            except:
+                print(results, idx)
+                raise
 
         else:  # Use personal prompt
             if len(candidate) != 2:
