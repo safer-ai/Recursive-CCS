@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import random
-from promptsource.templates import DatasetTemplates
+from promptsource.templates import DatasetTemplates # type: ignore
 from copy import deepcopy
 from functools import partial
 

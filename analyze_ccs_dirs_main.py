@@ -13,14 +13,16 @@ from utils_generation.state_load_utils import getActsLabel
 #%%
 # model_name = "gpt-neo-2.7B"
 model_name = "unifiedqa-t5-11b"
-dataset_list = ["ag-news", "dbpedia-14", "tweet-eval-emotion", "tweet-eval-sentiment", "amazon-polarity"]
+dataset_list = ["imdb","amazon-polarity","copa","ag-news","dbpedia-14","rte","boolq","qnli","piqa"]
+# dataset_list = ["ag-news", "dbpedia-14", "tweet-eval-emotion", "tweet-eval-sentiment", "amazon-polarity"]
 # dataset_list = ["amazon-polarity"]
-num_examples = 4000
+num_examples = 1000
 layer = None  # None for unifiedqa
 
 raw=True
-css_path = "uqa_n_all_30_w001_i0__"
+# css_path = "uqa_n_all_30_w001_i0__"
 # css_path = "uqa_n_all_30_w003_"
+css_path = "uqa_all_30_w0_"
 informative_strength = 1
 
 css_no_train_path = "notrain_" + css_path

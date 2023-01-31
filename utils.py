@@ -1,24 +1,21 @@
-import os
-import functools
 import argparse
 import copy
+import functools
+import os
+from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
-import pandas as pd
-from tqdm import tqdm
-
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets
 import torch.nn as nn
 import torch.nn.functional as F
-
 # make sure to install promptsource, transformers, and datasets!
-from promptsource.templates import DatasetTemplates
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForMaskedLM, AutoModelForCausalLM
-from datasets import load_dataset
-import pandas as pd
+from tqdm import tqdm # type: ignore
+from transformers import (AutoModelForCausalLM, AutoModelForMaskedLM,
+                          AutoModelForSeq2SeqLM, AutoTokenizer)
 
+from datasets import load_dataset
+from utils_generation.state_load_utils import Dataset # type: ignore
 
 ############# Model loading and result saving #############
 
@@ -69,7 +66,7 @@ def get_parser():
     return parser
 
 
-def load_model(model_name, cache_dir=None, parallelize=False, device="cuda"):
+def load_model(model_name: str, cache_dir=None, parallelize=False, device="cuda"):
     """
     Loads a model and its corresponding tokenizer, either parallelized across GPUs (if the model permits that; usually just use this for T5-based models) or on a single GPU
     """
@@ -109,28 +106,28 @@ def load_model(model_name, cache_dir=None, parallelize=False, device="cuda"):
 
 ############# CCS #############
 class MLPProbe(nn.Module):
-    def __init__(self, d):
+    def __init__(self, d: int):
         super().__init__()
         self.linear1 = nn.Linear(d, 100)
         self.linear2 = nn.Linear(100, 1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = F.relu(self.linear1(x))
         o = self.linear2(h)
         return torch.sigmoid(o)
 
 
-def project(x, constraints):
+def project(x: torch.Tensor, constraints: torch.Tensor) -> torch.Tensor:
     """Projects on the hyperplane defined by the constraints"""
     inner_products = torch.einsum("...h,nh->...n", x, constraints)
     return x - torch.einsum("...n,nh->...h", inner_products, constraints)
 
 
-def normalize(x):
+def normalize(x: torch.Tensor) -> torch.Tensor:
     return x / torch.norm(x, dim=-1, keepdim=True)
 
 
-def assert_orthonormal(x):
+def assert_orthonormal(x: torch.Tensor):
     max_diff = torch.max(torch.abs(torch.einsum("nh,mh->nm", x, x) - torch.eye(x.size(0)).to(x.device)))
     if max_diff > 1e-4:
         print("Warning max_diff =", max_diff)
@@ -138,12 +135,12 @@ def assert_orthonormal(x):
 
 
 class LinearWithConstraints(nn.Module):
-    def __init__(self, d, constraints):
+    def __init__(self, d: int, constraints: torch.Tensor):
         super().__init__()
         self.linear = nn.Linear(d, 1)
         self.constraints = constraints
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         w = project(self.linear.weight, self.constraints)
         y = F.linear(x, w, self.linear.bias)
         return torch.sigmoid(y)
@@ -154,45 +151,46 @@ class LinearWithConstraints(nn.Module):
 
 
 class LinearAlong(nn.Module):
-    def __init__(self, along):
+    def __init__(self, along: torch.Tensor):
         super().__init__()
         n, d = along.shape
         self.coeffs = nn.Linear(n, 1)
         self.coeffs.weight.data = torch.ones_like(self.coeffs.weight.data) / n
         self.along = along
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         w = torch.einsum("nd,nh->hd", self.along, self.coeffs.weight)
         y = F.linear(x, w, self.coeffs.bias)
         return torch.sigmoid(y)
 
 
 class Linear(nn.Module):
-    def __init__(self, d) -> None:
+    def __init__(self, d: int) -> None:
         super().__init__()
         self.linear = nn.Linear(d, 1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.sigmoid(self.linear(x))
 
-
+NormData = tuple[np.ndarray, np.ndarray] # mean, std
+Probe = Union[Linear, LinearAlong, LinearWithConstraints, MLPProbe]
 class CCS(object):
     def __init__(
         self,
-        train_ds,
-        nepochs=1000,
-        ntries=10,
-        lr=1e-3,
-        batch_size=-1,
-        verbose=False,
-        device="cuda",
-        linear=True,
-        weight_decay=0.01,
-        var_normalize=True,
-        constraints=None,
-        along=None,
-        lbfgs=False,
-        informative_strength=1,
+        train_ds: Dataset,
+        nepochs: int=1000,
+        ntries: int=10,
+        lr: float=1e-3,
+        batch_size: int=-1,
+        verbose: bool=False,
+        device: str="cuda",
+        linear:bool=True,
+        weight_decay:float=0.01,
+        var_normalize: bool=True,
+        constraints: Optional[torch.Tensor]=None,
+        along: Optional[torch.Tensor]=None,
+        lbfgs: bool=False,
+        informative_strength: float=1.,
     ):
         # data
         self.var_normalize = var_normalize
@@ -200,7 +198,7 @@ class CCS(object):
         # answer dims may vary
         self.xs = [x for x,y in train_ds]
         self.train_ds = train_ds
-        self.norm_datas = [(x.mean(0, keepdims=True), x.std(0, keepdims=True)) for x,y in train_ds]
+        self.norm_datas: list[NormData] = [(x.mean(0, keepdims=True), x.std(0, keepdims=True)) for x,y in train_ds]
         self.d = self.xs[0].shape[-1]
 
         # training
@@ -233,73 +231,73 @@ class CCS(object):
             self.probe = MLPProbe(self.d)
         self.probe.to(self.device)
 
-    def normalize(self, x, norm_data=None):
+    def normalize(self, x: np.ndarray, norm_data: Optional[NormData]=None) -> np.ndarray:
         """
         Mean-normalizes the data x (of shape (n, a, d))
         If self.var_normalize, also divides by the standard deviation
         """
         if norm_data is None:
-            mean = x.mean(axis=0, keepdims=True)
-            std = x.std(axis=0, keepdims=True)
+            mean: np.ndarray = x.mean(axis=0, keepdims=True)
+            std: np.ndarray = x.std(axis=0, keepdims=True)
         else:
             mean, std = norm_data
         
-        normalized_x = x - mean
+        normalized_x: np.ndarray = x - mean
         if self.var_normalize:
             normalized_x /= std
 
         return normalized_x
 
-    def get_tensor_data(self):
+    def get_tensor_data(self) -> list[torch.Tensor]:
         """
         Returns self.xs as appropriate normalized tensors (rather than np arrays)
         """
         return self.prepare(self.xs)
 
-    def prepare(self, xs):
+    def prepare(self, xs: list[np.ndarray]) -> list[torch.Tensor]:
         """
         Returns xs as appropriate normalized tensors (rather than np arrays)
         """
         return [torch.tensor(self.normalize(x, norm_data), dtype=torch.float, requires_grad=False, device=self.device) for x, norm_data in zip(xs, self.norm_datas)]
 
-    def get_loss(self, ps: list[torch.Tensor]):
+    def get_loss(self, ps: list[torch.Tensor]) -> torch.Tensor:
         """
         Returns the CCS loss the probabilities on each dataset, each of shape (n, a) or (n, a, 1)
         """
         return self.get_consistent_loss(ps) + self.informative_strength * self.get_informative_loss(ps)
 
-    def get_consistent_loss(self, ps: list[torch.Tensor]):
+    def get_consistent_loss(self, ps: list[torch.Tensor]) -> torch.Tensor:
         # return ((p0 - (1 - p1)) ** 2).mean(0)
         num_samples = sum(p.shape[0] for p in ps)
         total_loss = sum(((1 - p.sum(1)) ** 2).sum() for p in ps)
         return total_loss / num_samples
 
-    def get_informative_loss(self, ps: list[torch.Tensor]):
+    def get_informative_loss(self, ps: list[torch.Tensor]) -> torch.Tensor:
         # return (torch.min(p0, p1) ** 2).mean(0)
         num_samples = sum(p.shape[0] for p in ps)
         total_loss = sum(((1 - p.max(1)[0]) ** 2).sum() for p in ps)
         return total_loss / num_samples
 
-    def get_acc(self, test_ds, raw=False):
+    def get_acc(self, test_ds: Dataset, raw: bool=False) -> float:
         """
         Computes accuracy for the current parameters on the given test inputs
         """
         return self.get_probe_acc(self.best_probe, test_ds, raw=raw)
 
-    def get_probe_acc(self, probe, test_ds, raw=False):
+    def get_probe_acc(self, probe: Probe, test_ds: Dataset, raw: bool=False):
         xs = [x for x,y in test_ds]
         xs = self.prepare(xs)
         with torch.no_grad():
-            ps = [probe(x) for x in xs]
-        preds = [p.argmax(1).detach().cpu().numpy().astype(int)[:, 0] for p in ps] # same as below according to math
+            ps: list[torch.Tensor] = [probe(x) for x in xs]
+        preds: list[np.ndarray] = [p.argmax(1).detach().cpu().numpy().astype(int)[:, 0] for p in ps] # same as below according to math
         # 0.5 * (p0 + (1 - p1)) < 0.5 <=> p0 + 1 - p1 < 1 <=> p0 < p1
         # print(ps[0][:10],"preds", preds[0][:10], "corrects", [y for x,y in test_ds][:10])
         
         # avg_confidence = 0.5 * (p0 + (1 - p1))
         # print("avg_confidence", avg_confidence[:10])
         # predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        corrects = [(pred == y) for pred, y in zip(preds, [y for x,y in test_ds])]
-        num_samples = sum(p.shape[0] for p in ps)
+        corrects: list[np.ndarray] = [(pred == y) for pred, y in zip(preds, [y for x,y in test_ds])]
+        num_samples: int = sum(p.shape[0] for p in ps)
         # print("corrects", corrects[:10], "num_samples", num_samples, "sum", sum(c.sum() for c in corrects))
         acc = sum(c.sum() for c in corrects) / num_samples
         # for i in [10,100,200, 500, 700, 800, 1000]:
@@ -356,7 +354,7 @@ class CCS(object):
 
         return loss.detach().cpu().item()
 
-    def train_with_lbfgs(self, debug=False):
+    def train_with_lbfgs(self, debug:bool=False):
         """
         Does a single training run of nepochs epochs
 
@@ -383,7 +381,7 @@ class CCS(object):
         if isinstance(self.probe, LinearWithConstraints):
             self.probe.project()
 
-        def closure(debug=False):
+        def closure(debug:bool=False):
             if isinstance(self.probe, LinearWithConstraints):
                 self.probe.project()
             optimizer.zero_grad()
@@ -418,7 +416,7 @@ class CCS(object):
             self.probe.project()
         return loss.detach().cpu().item()
 
-    def repeated_train(self, test_ds, additional_info="", verbose=True):
+    def repeated_train(self, test_ds:Dataset, additional_info:str="", verbose:bool=True):
         best_loss = np.inf
         best_test_loss = np.inf
         best_test_acc = 0
@@ -440,17 +438,17 @@ class CCS(object):
 
         return best_loss, best_test_loss, best_test_acc
 
-    def eval(self, xs):
+    def eval(self, xs: list[np.ndarray]) -> tuple[float, float, float]:
         """
         return consistent loss, informative loss, and loss on the test set
         """
         return self.eval_probe(self.best_probe, xs)
 
-    def eval_probe(self, probe, xs):
-        xs = self.prepare(xs)
+    def eval_probe(self, probe: Probe, xs: list[np.ndarray]) -> tuple[float, float, float]:
+        xst = self.prepare(xs)
         with torch.no_grad():
             # probe
-            ps = [probe(x) for x in xs]
+            ps = [probe(x) for x in xst]
 
             # get the corresponding loss
             consistent_loss = self.get_consistent_loss(ps).item()
@@ -458,14 +456,14 @@ class CCS(object):
             # print(f"consistent_loss={consistent_loss:.5f} informative_loss={informative_loss:.5f} ")
             return consistent_loss, informative_loss, consistent_loss + self.informative_strength * informative_loss
 
-    def save(self, path):
+    def save(self, path: Union[str, Path]):
         torch.save(self.best_probe.state_dict(), path)
 
-    def load(self, path):
+    def load(self, path: Union[str, Path]):
         self.best_probe.load_state_dict(torch.load(path))
         self.best_probe = self.best_probe.to(self.device)
 
-    def get_direction(self):
+    def get_direction(self) -> torch.Tensor:
         """
         Returns the direction of the probe
         """

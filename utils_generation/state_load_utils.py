@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import json
 
+Dataset = list[tuple[np.ndarray, np.ndarray]]
+
 ######## JSON Load ########
 json_dir = "./registration"
 
@@ -260,39 +262,3 @@ def getActsLabel(
     )
     projection_dict = {key: range(len(data_dict[key])) for key in dataset_list}
     return getPairs(projection_dict, data_dict, permutation_dict, split)
-
-
-"""------ Func: get_zeros_acc ------
-## Input = csv_name, mdl_name, dataset_list, prefix, prompt_dict = None, avg = False
-    csv_name: The name of csv we get accuracy from.
-    mdl_name: The name of the model.
-    dataset_list: List of dataset you want the accuracy from.
-    prefix: The name of prefix.
-    prompt_dict: Same as in getDir(). You can specify which prompt to get using this variable. Default is None, i.e. get all prompts.
-    avg: Whether to average upon return. If True, will return a numbers, otherwise a dict with key from dataset_list and values being a list of accuracy.
-## Output = number / dict, depending on `avg`
-"""
-
-
-def get_zeros_acc(csv_name, mdl_name, dataset_list, prefix, prompt_dict=None, avg=False):
-    zeros = pd.read_csv(os.path.join(load_dir, csv_name + ".csv"))
-    zeros.dropna(subset=["calibrated"], inplace=True)
-    subzeros = zeros.loc[(zeros["model"] == mdl_name) & (zeros["prefix"] == prefix)]
-
-    # Extend prompt_dict to ALL dict if it is None
-    if prompt_dict is None:
-        prompt_dict = {key: range(1000) for key in dataset_list}
-
-    # Extract accuracy, each key is a set name and value is a list of acc
-    acc_dict = {}
-    for dataset in dataset_list:
-        filtered_csv = subzeros.loc[
-            (subzeros["dataset"] == dataset) & (subzeros["prompt_idx"].isin(prompt_dict[dataset]))
-        ]
-        acc_dict[dataset] = filtered_csv["calibrated"].to_list()
-
-    if not avg:
-        return acc_dict
-    else:
-        # get the dataset avg, and finally the global level avg
-        return np.mean([np.mean(values) for values in acc_dict.values()])
