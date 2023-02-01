@@ -9,5 +9,3 @@ Structure of the repository:
 - analyze the directions found by CCS by running `analyze_ccs_dirs_main.py` (looking at a single layer) or `analyze_ccs_dirs_layers_main.py` (looking at multiple layers at a time) as Python notebooks.
 - get a sense of what the CCS loss does by running `vizualisation.py` as a Python notebook.
 - see what happens when you mix directions by running `mixing_directions.py` as a Python notebook.
-
-Note: `evaluate.py`, `generate_ccs_dirs.py`, `evaluate.py`, and `analyze_ccs_dirs.py` legacy files from when I only looked at datasets composed of a single prompt. They are not used anymore.
